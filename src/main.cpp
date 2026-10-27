@@ -1,203 +1,61 @@
-/*
- * main.cpp - symulator 4 czujnikow TPMS Schrader EG53MA4 (ESP32 + CC1101)
- * dla Opla Astry J Sedan 2016 (EU, 433 MHz, TPMS bezposredni).
- *
- * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- *  ZASTRZEZENIE: projekt wylacznie diagnostyczny/testowy.
- *  Symulator dostarcza SZTUCZNE dane cisnienia i temperatury i NIE
- *  zastepuje prawdziwych czujnikow TPMS. Nie uzywac podczas jazdy.
- * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- *
- * Tryby pracy:
- *  NORMAL - rotacja 4 kol, burst 3-5 ramek co TX_INTERVAL_S, deep sleep
- *           miedzy transmisjami (budzik RTC + budzenie przyciskiem/LF)
- *  LEARN  - nauka czujnikow w aucie: jedno kolo naraz, kolejnosc
- *           FL -> FR -> RR -> RL, przycisk = kolejne kolo, okno czasowe
- *  SINGLE - wymuszone nadawanie jednego ID (testy/procedury serwisowe)
- *
- * Protokol: rtl_433 src/devices/schraeder.c (schrader_EG53MA4),
- * Manchester G.E.T. MC, chip 120 us, ASK/OOK 433.92 MHz (opcjonalnie 2-FSK).
- */
+/* Symulator diagnostyczny TPMS. Sztuczne cisnienie moze ukryc usterke opony. */
 #include <Arduino.h>
 #include <esp_sleep.h>
-#include <driver/gpio.h>
 
-#include "config.h"
-#include "tpms_frame.h"
-#include "radio.h"
-#include "power.h"
-#include "ui.h"
-#include "console.h"
 #include "app.h"
+#include "config.h"
+#include "console.h"
+#include "power.h"
+#include "radio.h"
+#include "settings_store.h"
+#include "tpms_frame.h"
+#include "ui.h"
 
-/* ------------------------------------------------------------------ */
-/*  Dane czujnikow (mapowanie ID -> kolo)                              */
-/* ------------------------------------------------------------------ */
-#define KPA10(x) ((uint16_t)((x) * 10.0f + 0.5f))
+AppState *g_app = nullptr;
 
-static const tpms_sensor_t SENSOR[WHEEL_COUNT] = {
-    { SENSOR_FL_ID, KPA10(SENSOR_FL_PRESS_KPA), SENSOR_TEMP_C, "FL" },
-    { SENSOR_FR_ID, KPA10(SENSOR_FR_PRESS_KPA), SENSOR_TEMP_C, "FR" },
-    { SENSOR_RR_ID, KPA10(SENSOR_RR_PRESS_KPA), SENSOR_TEMP_C, "RR" },
-    { SENSOR_RL_ID, KPA10(SENSOR_RL_PRESS_KPA), SENSOR_TEMP_C, "RL" },
-};
-
-/* Kolejnosc nauki (kolejnosc w tablicy SENSOR = FL, FR, RR, RL). */
-static const uint8_t LEARN_SEQ[WHEEL_COUNT] = {
-    LEARN_ORDER_0, LEARN_ORDER_1, LEARN_ORDER_2, LEARN_ORDER_3,
-};
-
-/* ------------------------------------------------------------------ */
-/*  Stan w RTC (przetrwuje deep sleep)                                 */
-/* ------------------------------------------------------------------ */
-/* Magic zwiazany z wersja konfiguracji: zmiana CONFIG_VERSION (np. po
- * zmianie formatu stanu w RTC) zeruje caly stan po wybudzeniu. */
-#define RTC_MAGIC (0x54504D53u ^ (uint32_t)CONFIG_VERSION)  // 'TPMS' ^ version
-
-RTC_DATA_ATTR static uint32_t rtc_magic;
-RTC_DATA_ATTR static uint8_t  rtc_mode = APP_MODE_NORMAL;
-RTC_DATA_ATTR static uint8_t  rtc_seq_idx = 0;       // pozycja w LEARN_SEQ (LEARN)
-RTC_DATA_ATTR static uint8_t  rtc_single_wheel = 0;  // kolo w SINGLE (indeks SENSOR)
-RTC_DATA_ATTR static uint8_t  rtc_rot_idx = 0;       // rotacja w NORMAL
-RTC_DATA_ATTR static uint32_t rtc_wake_count = 0;
-RTC_DATA_ATTR static uint32_t rtc_interval_s = 0;    // 0 = auto wg ACC
-RTC_DATA_ATTR static uint32_t rtc_flags = TPMS_FLAGS;
-RTC_DATA_ATTR static uint64_t rtc_last_acc_ms = 0;
-
-/* Stan sesji (wazny tylko w biezaczym wybudzeniu) */
-static uint32_t stay_awake_until = 0;
-static uint32_t next_tx_ms = 0;
-static uint32_t learn_window_start = 0;
-static uint32_t learn_session_start = 0;
-static uint32_t single_start = 0;
-static bool     request_sleep = false;
-static bool     low_batt = false;
-static uint32_t supply_mv = 0;
+static const char *const WHEEL_NAMES[WHEEL_COUNT] = {"FL", "FR", "RR", "RL"};
+static uint32_t stay_awake_until;
+static bool request_sleep;
+static uint32_t supply_mv;
 #if PIN_LF_TRIGGER >= 0
-static bool     lf_prev = false;       // poprzedni stan wejscia LF (zbocze)
+static bool lf_previous;
 #endif
 
-/* ------------------------------------------------------------------ */
-/*  Pomocnicze                                                         */
-/* ------------------------------------------------------------------ */
-static uint32_t compute_interval(void);
-
-/* Aktywne kolo: SINGLE trzyma bezposredni indeks SENSOR, LEARN - pozycje
- * w sekwencji nauki LEARN_SEQ (moga sie roznic po zmianie LEARN_ORDER_*). */
-static uint8_t active_wheel(void)
+static bool ignition_on(void)
 {
-    return (rtc_mode == APP_MODE_SINGLE)
-            ? (uint8_t)(rtc_single_wheel % WHEEL_COUNT)
-            : LEARN_SEQ[rtc_seq_idx % WHEEL_COUNT];
+#if PIN_ACC >= 0
+    return digitalRead(PIN_ACC) == HIGH;
+#else
+    return false;
+#endif
 }
 
-/* Pozycja kola w sekwencji nauki (do trybu LEARN). */
-static uint8_t seq_pos_of(uint8_t wheel)
-{
-    for (uint8_t i = 0; i < WHEEL_COUNT; i++) {
-        if (LEARN_SEQ[i] == wheel) {
-            return i;
+class HardwareRadio final : public RadioSink {
+public:
+    bool send(uint8_t wheel) override
+    {
+        if (wheel >= WHEEL_COUNT) {
+            return false;
         }
+        const sensor_settings_t &sensor = g_settings.wheels[wheel];
+        uint8_t frame[TPMS_TX_BYTES];
+        if (!tpms_build_frame(frame, sensor.id, sensor.pressure_kpa10,
+                              (int8_t)sensor.temp_c, g_settings.flags)) {
+            return false;
+        }
+        bool ok = radio_send_burst(frame, TPMS_TX_BYTES, g_settings.burst_frames,
+                                   g_settings.frame_gap_ms);
+        Serial.printf("TX %s id=%06X %u.%u kPa %d C flags=%08X%s\n",
+                      WHEEL_NAMES[wheel], (unsigned)sensor.id,
+                      sensor.pressure_kpa10 / 10u, sensor.pressure_kpa10 % 10u,
+                      (int)sensor.temp_c, (unsigned)g_settings.flags,
+                      ok ? "" : " TX-ERR");
+        return ok;
     }
-    return 0;
-}
+};
 
-static void refresh_power(void)
-{
-    supply_mv = power_read_mv();
-    low_batt = power_low_battery(supply_mv);
-}
-
-static void build_frame_for(uint8_t wheel, uint8_t out[TPMS_TX_BYTES])
-{
-    const tpms_sensor_t *s = &SENSOR[wheel % WHEEL_COUNT];
-    tpms_build_frame(out, s->id, s->press_kpa10, s->temp_c, rtc_flags, low_batt);
-}
-
-void app_send_burst_wheel(uint8_t wheel)
-{
-    uint8_t frame[TPMS_TX_BYTES];
-    build_frame_for(wheel, frame);
-    bool ok = radio_send_burst(frame, TPMS_TX_BYTES, TX_BURST_FRAMES);
-    Serial.printf("TX %s id=%06X %.1f kPa %d C flags=%08X%s%s\n",
-                  SENSOR[wheel % WHEEL_COUNT].name,
-                  (unsigned)SENSOR[wheel % WHEEL_COUNT].id,
-                  SENSOR[wheel % WHEEL_COUNT].press_kpa10 / 10.0f,
-                  (int)SENSOR[wheel % WHEEL_COUNT].temp_c,
-                  (unsigned)rtc_flags, low_batt ? " LOWBATT" : "",
-                  ok ? "" : " TX-ERR");
-}
-
-void app_send_burst_all(void)
-{
-    for (uint8_t i = 0; i < WHEEL_COUNT; i++) {
-        app_send_burst_wheel((uint8_t)((rtc_rot_idx + i) % WHEEL_COUNT));
-    }
-    rtc_rot_idx = (uint8_t)((rtc_rot_idx + 1) % WHEEL_COUNT);
-}
-
-void app_print_frame(uint8_t wheel)
-{
-    uint8_t frame[TPMS_TX_BYTES];
-    uint8_t payload[TPMS_PAYLOAD_LEN];
-    const tpms_sensor_t *s = &SENSOR[wheel % WHEEL_COUNT];
-    build_frame_for(wheel, frame);
-    tpms_build_payload(payload, s->id, s->press_kpa10, s->temp_c, rtc_flags, low_batt);
-
-    Serial.printf("%s frame:", s->name);
-    for (uint8_t i = 0; i < TPMS_TX_BYTES; i++) {
-        Serial.printf(" %02X", frame[i]);
-    }
-    Serial.printf("\n%s payload:", s->name);
-    for (uint8_t i = 0; i < TPMS_PAYLOAD_LEN; i++) {
-        Serial.printf(" %02X", payload[i]);
-    }
-    Serial.printf("  crc=%02X id=%06X press=%.1f kPa temp=%d F\n",
-                  payload[9], (unsigned)s->id,
-                  payload[7] * 2.5f, (int)payload[8]);
-}
-
-void app_print_info(void)
-{
-    Serial.printf("FW %s  config v%d  mode=%s  wheel=%s\n",
-                  FW_VERSION, CONFIG_VERSION,
-                  rtc_mode == APP_MODE_NORMAL ? "NORMAL" :
-                  rtc_mode == APP_MODE_LEARN ? "LEARN" : "SINGLE",
-                  SENSOR[active_wheel()].name);
-    for (uint8_t i = 0; i < WHEEL_COUNT; i++) {
-        Serial.printf("  %s id=%06X press=%.1f kPa temp=%d C\n",
-                      SENSOR[i].name, (unsigned)SENSOR[i].id,
-                      SENSOR[i].press_kpa10 / 10.0f, (int)SENSOR[i].temp_c);
-    }
-    Serial.printf("flags=%08X mod=%s chip=%dus burst=%d interval=%us wake=%lu\n",
-                  (unsigned)rtc_flags,
-                  TPMS_MODULATION == MODE_FSK ? "FSK" : "OOK",
-                  TPMS_CHIP_US, TX_BURST_FRAMES,
-                  (unsigned)compute_interval(),
-                  (unsigned long)rtc_wake_count);
-    Serial.printf("Vcc=%u mV%s\n", (unsigned)supply_mv, low_batt ? " LOWBATT" : "");
-}
-
-uint32_t app_supply_mv(void)
-{
-    refresh_power();
-    return supply_mv;
-}
-
-void app_set_interval(uint32_t seconds)
-{
-    rtc_interval_s = seconds;
-}
-
-void app_set_flags(uint32_t flags)
-{
-    rtc_flags = flags;
-}
-
-void app_request_sleep(void)
-{
-    request_sleep = true;
-}
+static HardwareRadio hardware_radio;
+static AppState app_state(&g_settings, &hardware_radio);
 
 void app_stay_awake(uint32_t ms)
 {
@@ -207,94 +65,90 @@ void app_stay_awake(uint32_t ms)
     }
 }
 
-uint8_t app_mode(void)
+void app_request_sleep(void)
 {
-    return rtc_mode;
+    request_sleep = true;
 }
 
-uint8_t app_wheel(void)
+bool app_save_and_apply(void)
 {
-    return active_wheel();
+    if (!settings_store_save()) {
+        Serial.println(F("BLAD: nie zapisano NVS (walidacja lub zapis)"));
+        return false;
+    }
+    if (!radio_init(&g_settings)) {
+        Serial.println(F("OSTRZEZENIE: zapisano, ale CC1101 nie odpowiada"));
+    }
+    Serial.println(F("OK: zapisano w NVS"));
+    return true;
 }
 
-void app_next_wheel(void)
+void app_print_frame(uint8_t wheel)
 {
-    if (rtc_mode == APP_MODE_SINGLE) {
-        rtc_single_wheel = (uint8_t)((rtc_single_wheel + 1) % WHEEL_COUNT);
+    if (wheel >= WHEEL_COUNT) {
+        return;
     }
-    else {
-        rtc_seq_idx = (uint8_t)((rtc_seq_idx + 1) % WHEEL_COUNT);
+    const sensor_settings_t &s = g_settings.wheels[wheel];
+    uint8_t frame[TPMS_TX_BYTES];
+    uint8_t payload[TPMS_PAYLOAD_LEN];
+    if (!tpms_build_frame(frame, s.id, s.pressure_kpa10, (int8_t)s.temp_c,
+                          g_settings.flags)
+            || !tpms_build_payload(payload, s.id, s.pressure_kpa10,
+                                   (int8_t)s.temp_c, g_settings.flags)) {
+        Serial.println(F("BLAD: nieprawidlowa konfiguracja ramki"));
+        return;
     }
-    ui_blink_count((uint8_t)(active_wheel() + 1));
-    Serial.printf("Kolo: %s\n", SENSOR[active_wheel()].name);
-    learn_window_start = millis();
+    Serial.printf("%s payload:", WHEEL_NAMES[wheel]);
+    for (uint8_t i = 0; i < TPMS_PAYLOAD_LEN; ++i) {
+        Serial.printf(" %02X", payload[i]);
+    }
+    Serial.printf("\n%s frame:", WHEEL_NAMES[wheel]);
+    for (uint8_t i = 0; i < TPMS_TX_BYTES; ++i) {
+        Serial.printf(" %02X", frame[i]);
+    }
+    Serial.println();
 }
 
-void app_set_mode(uint8_t mode, uint8_t wheel)
+void app_print_info(void)
 {
-    rtc_mode = mode;
-    switch (mode) {
-    case APP_MODE_LEARN:
-        rtc_seq_idx = seq_pos_of((uint8_t)(wheel % WHEEL_COUNT));
-        learn_window_start = millis();
-        learn_session_start = millis();
-        next_tx_ms = 0;
-        ui_set_pattern(UI_PAT_LEARN);
-        ui_blink_count((uint8_t)(active_wheel() + 1));
-        Serial.printf("LEARN start, kolo %s\n", SENSOR[active_wheel()].name);
-        app_stay_awake(LEARN_TOTAL_TIMEOUT_MS);
-        break;
-    case APP_MODE_SINGLE:
-        rtc_single_wheel = (uint8_t)(wheel % WHEEL_COUNT);
-        single_start = millis();
-        next_tx_ms = 0;
-        ui_set_pattern(UI_PAT_SINGLE);
-        ui_blink_count((uint8_t)(active_wheel() + 1));
-        Serial.printf("SINGLE start, kolo %s\n", SENSOR[active_wheel()].name);
-        app_stay_awake(SINGLE_TIMEOUT_MS ? SINGLE_TIMEOUT_MS : 3600000u);
-        break;
-    default:
-        rtc_mode = APP_MODE_NORMAL;
-        ui_set_pattern(UI_PAT_NORMAL);
-        Serial.println(F("NORMAL"));
-        next_tx_ms = 0;
-        app_stay_awake(BOOT_STAY_AWAKE_MS);
-        break;
+    Serial.printf("FW %s NVS v%u mode=%u wheel=%s errors=%lu\n", FW_VERSION,
+                  (unsigned)SETTINGS_VERSION, (unsigned)g_app->mode(),
+                  WHEEL_NAMES[g_app->active_wheel()],
+                  (unsigned long)g_app->last_error_count());
+    for (uint8_t i = 0; i < WHEEL_COUNT; ++i) {
+        const sensor_settings_t &s = g_settings.wheels[i];
+        Serial.printf("  %s id=%06X pressure=%u.%u kPa temp=%d C\n",
+                      WHEEL_NAMES[i], (unsigned)s.id, s.pressure_kpa10 / 10u,
+                      s.pressure_kpa10 % 10u, (int)s.temp_c);
+    }
+    Serial.printf("flags=%08X OOK chip=%u us burst=%u gap=%u ms\n",
+                  (unsigned)g_settings.flags, TPMS_CHIP_US, g_settings.burst_frames,
+                  g_settings.frame_gap_ms);
+    Serial.printf("RF=%.2f MHz power=%d dBm intervals=%lu/%lu/%lu s\n",
+                  g_settings.frequency_mhz, g_settings.tx_power_dbm,
+                  (unsigned long)g_settings.normal_interval_s,
+                  (unsigned long)g_settings.ignition_interval_s,
+                  (unsigned long)g_settings.parking_interval_s);
+    Serial.printf("Vcc=%u mV (nie zmienia flag TPMS)\n", (unsigned)supply_mv);
+}
+
+static void sync_ui(void)
+{
+    static AppMode previous_mode = AppMode::NORMAL;
+    static uint8_t previous_wheel = UINT8_MAX;
+    AppMode mode = g_app->mode();
+    uint8_t wheel = g_app->active_wheel();
+    if (mode != previous_mode || wheel != previous_wheel) {
+        ui_set_pattern(mode == AppMode::LEARN ? UI_PAT_LEARN
+                : mode == AppMode::SINGLE ? UI_PAT_SINGLE : UI_PAT_NORMAL);
+        if (mode != AppMode::NORMAL) {
+            ui_blink_count((uint8_t)(wheel + 1u));
+        }
+        previous_mode = mode;
+        previous_wheel = wheel;
     }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Cykl nadawczy w trybie NORMAL                                      */
-/* ------------------------------------------------------------------ */
-static uint32_t compute_interval(void)
-{
-    if (rtc_interval_s != 0) {
-        return rtc_interval_s;
-    }
-#if PIN_ACC < 0
-    /* Bez wejscia ACC stale pracujemy z interwalem podstawowym - logika
-     * "5 min po zaniku ACC" nie ma wtedy zastosowania. */
-    return (uint32_t)TX_INTERVAL_S;
-#else
-    uint64_t now_ms = power_elapsed_ms();
-    if (digitalRead(PIN_ACC) == HIGH) {
-        rtc_last_acc_ms = now_ms;
-        return (uint32_t)TX_INTERVAL_IGNITION_S;
-    }
-    if (now_ms - rtc_last_acc_ms > (uint64_t)ACC_GRACE_MS) {
-        return PARKING_SHUTDOWN ? 0u : (uint32_t)TX_INTERVAL_PARKING_S;
-    }
-    return (uint32_t)TX_INTERVAL_S;
-#endif
-}
-
-static void tx_cycle(void)
-{
-    refresh_power();
-    app_send_burst_all();
-}
-
-/* Czy ktorekolwiek zrodlo budzenia poziomowego jest aktywne? */
 static bool wake_sources_active(void)
 {
     if (ui_button_down() || digitalRead(PIN_BUTTON) == BTN_ACTIVE_LEVEL) {
@@ -308,244 +162,93 @@ static bool wake_sources_active(void)
     return false;
 }
 
-static void go_sleep(uint32_t seconds)
+static void go_sleep(void)
 {
-    /* Nie spij, dopoki przycisk jest wcisniety lub LF aktywne - EXT0/EXT1
-     * dzialaja poziomowo, wiec sen przy aktywnym zrodle = natychmiastowa
-     * petla wybudzen. Dajemy krotki margines i wracamy do petli. */
-    if (wake_sources_active()) {
-        app_stay_awake(500);
+    if (g_app->mode() != AppMode::NORMAL) {
         return;
     }
-
+    if (wake_sources_active()) {
+        app_stay_awake(500u);
+        return;
+    }
+    uint32_t seconds = g_app->interval_s(ignition_on());
     ui_set_pattern(UI_PAT_OFF);
-    digitalWrite(PIN_LED, LOW);
-
-    Serial.printf("sleep %us\n", (unsigned)seconds);
+    Serial.printf("sleep %lu s\n", (unsigned long)seconds);
     Serial.flush();
-    power_deep_sleep(seconds);   // nie wraca
+    power_deep_sleep(seconds);
 }
 
-/* ------------------------------------------------------------------ */
 void setup(void)
 {
     Serial.begin(SERIAL_BAUD);
     ui_init();
     power_init();
+    settings_store_begin();
     console_init();
-
 #if PIN_LF_TRIGGER >= 0
     pinMode(PIN_LF_TRIGGER, INPUT_PULLDOWN);
+    lf_previous = digitalRead(PIN_LF_TRIGGER) == HIGH;
 #endif
 #if PIN_ACC >= 0
-    /* INPUT (bez podciagania): dolna galazka dzielnika wymusza stan niski,
-     * a wewnetrzny pulldown (~45 k) obciazylby dzielnik i zbil prog VIH. */
     pinMode(PIN_ACC, INPUT);
 #endif
 
-    if (rtc_magic != RTC_MAGIC) {
-        rtc_magic = RTC_MAGIC;
-        rtc_mode = APP_MODE_NORMAL;
-        rtc_seq_idx = 0;
-        rtc_single_wheel = 0;
-        rtc_rot_idx = 0;
-        rtc_wake_count = 0;
-        rtc_interval_s = 0;
-        rtc_flags = TPMS_FLAGS;
-        rtc_last_acc_ms = 0;
+    g_app = &app_state;
+    bool radio_ready = radio_init(&g_settings);
+    supply_mv = power_read_mv();
+    Serial.printf("\nTPMS DIAG FW %s - DANE SZTUCZNE, NIE DO JAZDY\n", FW_VERSION);
+    Serial.printf("NVS: %s; dostep=%s\n",
+                  settings_load_result_text(settings_store_last_load()),
+                  settings_store_available() ? "tak" : "nie");
+    if (!radio_ready) {
+        Serial.println(F("BLAD: brak CC1101; sprawdz 3V3/SPI"));
     }
-    rtc_wake_count++;
-
-    bool radio_ok = radio_init();
-    Serial.println();
-    Serial.printf("TPMS simulator FW %s (config v%d) - SYMULATOR, dane sztuczne!\n",
-                  FW_VERSION, CONFIG_VERSION);
-    if (!radio_ok) {
-        Serial.println(F("BLAD: brak modulu CC1101 (sprawdz SPI)"));
-    }
-
-    refresh_power();
-    if (low_batt) {
-        Serial.printf("OSTRZEZENIE: niskie napiecie zasilania %u mV!\n",
-                      (unsigned)supply_mv);
+    if (power_low_battery(supply_mv)) {
+        Serial.println(F("OSTRZEZENIE: niskie zasilanie emulatora"));
     }
 
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-    uint32_t iv = compute_interval();
-
-    switch (cause) {
-    case ESP_SLEEP_WAKEUP_TIMER:
-        /* zwykly cykl - nadaj i spij bez czuwania */
-        next_tx_ms = 0;
-        stay_awake_until = 0;
-        break;
-
-    case ESP_SLEEP_WAKEUP_EXT0:
-        /* przycisk - obsluga gestu w petli, krotkie okno konsoli */
-        Serial.println(F("wake: button"));
-        next_tx_ms = UINT32_MAX;      // nie nadawaj automatycznie
-        stay_awake_until = millis() + BOOT_STAY_AWAKE_MS;
-        break;
-
-    case ESP_SLEEP_WAKEUP_EXT1: {
-        uint64_t st = esp_sleep_get_ext1_wakeup_status();
-        Serial.printf("wake: ext1 mask=%08X%08X\n",
-                      (unsigned)(st >> 32), (unsigned)(st & 0xFFFFFFFFu));
-        refresh_power();
-        app_send_burst_wheel(active_wheel());   // aktywacja LF = natychmiast
-        next_tx_ms = UINT32_MAX;
-        stay_awake_until = millis() + BOOT_STAY_AWAKE_MS;
-        break;
-    }
-
-    default:
-        Serial.println(F("wake: power-on"));
-        next_tx_ms = 0;
-        stay_awake_until = millis() + BOOT_STAY_AWAKE_MS;
-        break;
-    }
-
-    if (rtc_mode == APP_MODE_LEARN) {
-        ui_set_pattern(UI_PAT_LEARN);
-        learn_window_start = millis();
-        learn_session_start = millis();
-        next_tx_ms = 0;
-        stay_awake_until = millis() + LEARN_TOTAL_TIMEOUT_MS;
-    }
-    else if (rtc_mode == APP_MODE_SINGLE) {
-        ui_set_pattern(UI_PAT_SINGLE);
-        single_start = millis();
-        next_tx_ms = 0;
-        stay_awake_until = millis() +
-                           (SINGLE_TIMEOUT_MS ? SINGLE_TIMEOUT_MS : 3600000u);
-    }
-    else {
-        ui_set_pattern(low_batt ? UI_PAT_LOWBAT : UI_PAT_NORMAL);
-    }
-
-    /* Po wybudzeniu przyciskiem/LF obsluzylismy juz akcje - nie powtarzaj
-     * cyklu natychmiast, tylko odloz go o pelny okres. */
-    if (cause == ESP_SLEEP_WAKEUP_EXT0 || cause == ESP_SLEEP_WAKEUP_EXT1) {
-        if (rtc_mode != APP_MODE_NORMAL) {
-            next_tx_ms = millis() + LEARN_TX_PERIOD_MS;
-        }
-    }
+    bool transmit = cause != ESP_SLEEP_WAKEUP_EXT0 && cause != ESP_SLEEP_WAKEUP_EXT1;
+    g_app->begin(millis(), transmit);
 #if PIN_LF_TRIGGER >= 0
-    /* LF ciagle aktywne = brak nowego zbocza = brak kolejnego bursta */
-    lf_prev = (digitalRead(PIN_LF_TRIGGER) == HIGH);
+    if (cause == ESP_SLEEP_WAKEUP_EXT1) {
+        g_app->send_current();
+    }
 #endif
-
-    Serial.printf("Vcc=%u mV  tryb=%d  interwal=%us\n", (unsigned)supply_mv,
-                  (int)rtc_mode, (unsigned)iv);
+    stay_awake_until = cause == ESP_SLEEP_WAKEUP_TIMER
+            ? millis() : millis() + BOOT_STAY_AWAKE_MS;
+    sync_ui();
     app_print_info();
-    Serial.println(F("gotowy ('help' - komendy)"));
+    Serial.println(F("gotowy; help = komendy; stay 60 = konsola 60 s"));
 }
 
 void loop(void)
 {
     uint32_t now = millis();
-
     ui_update();
-
-    /* gesty przycisku */
-    ui_event_t ev = ui_poll();
-    if (ev == UI_EV_SHORT) {
-        if (rtc_mode == APP_MODE_NORMAL) {
-            refresh_power();
-            app_send_burst_all();     // "aktywuj kolo" - nadaj teraz
-        }
-        else {
-            app_next_wheel();         // learn/single: kolejne kolo
-        }
+    switch (ui_poll()) {
+    case UI_EV_SHORT: g_app->short_press(now); break;
+    case UI_EV_LONG: g_app->long_press(now); break;
+    case UI_EV_VERYLONG: g_app->very_long_press(now); break;
+    default: break;
     }
-    else if (ev == UI_EV_LONG) {
-        if (rtc_mode == APP_MODE_LEARN) {
-            app_set_mode(APP_MODE_NORMAL, 0);
-        }
-        else {
-            app_set_mode(APP_MODE_LEARN, 0);
-        }
-    }
-    else if (ev == UI_EV_VERYLONG) {
-        if (rtc_mode == APP_MODE_SINGLE) {
-            app_set_mode(APP_MODE_NORMAL, 0);
-        }
-        else {
-            app_set_mode(APP_MODE_SINGLE, active_wheel());
-        }
-    }
-
     console_poll();
-
 #if PIN_LF_TRIGGER >= 0
-    /* aktywacja LF tez dziala "na zywo" (nie tylko przez budzenie) */
-    {
-        bool lf = (digitalRead(PIN_LF_TRIGGER) == HIGH);
-        if (lf && !lf_prev) {
-            refresh_power();
-            app_send_burst_wheel(active_wheel());
-            /* po recznej transmisji odloz cykl - bez tego LF moglby
-             * wywolac 2-3 bursty zamiast jednego */
-            if (rtc_mode != APP_MODE_NORMAL) {
-                next_tx_ms = millis() + LEARN_TX_PERIOD_MS;
-            }
-        }
-        lf_prev = lf;
+    bool lf = digitalRead(PIN_LF_TRIGGER) == HIGH;
+    if (lf && !lf_previous) {
+        g_app->send_current();
+        app_stay_awake(BOOT_STAY_AWAKE_MS);
     }
+    lf_previous = lf;
 #endif
+    g_app->tick(millis(), ignition_on());
+    sync_ui();
 
     if (request_sleep) {
         request_sleep = false;
-        go_sleep(compute_interval());
-    }
-
-    switch (rtc_mode) {
-    case APP_MODE_LEARN:
-        if ((int32_t)(now - next_tx_ms) >= 0) {
-            refresh_power();
-            app_send_burst_wheel(active_wheel());
-            next_tx_ms = now + LEARN_TX_PERIOD_MS;
-        }
-        if (now - learn_window_start >= LEARN_WINDOW_MS) {
-            if (LEARN_WINDOW_EXPIRE_TO_NORMAL) {
-                Serial.println(F("okno learn minelo - powrot do NORMAL"));
-                app_set_mode(APP_MODE_NORMAL, 0);
-            }
-            else if (rtc_seq_idx + 1u >= WHEEL_COUNT) {
-                Serial.println(F("learn ukonczony - powrot do NORMAL"));
-                app_set_mode(APP_MODE_NORMAL, 0);
-            }
-            else {
-                app_next_wheel();
-            }
-        }
-        if (now - learn_session_start >= LEARN_TOTAL_TIMEOUT_MS) {
-            Serial.println(F("timeout learn - powrot do NORMAL"));
-            app_set_mode(APP_MODE_NORMAL, 0);
-        }
-        break;
-
-    case APP_MODE_SINGLE:
-        if ((int32_t)(now - next_tx_ms) >= 0) {
-            refresh_power();
-            app_send_burst_wheel(active_wheel());
-            next_tx_ms = now + LEARN_TX_PERIOD_MS;
-        }
-        if (SINGLE_TIMEOUT_MS && now - single_start >= SINGLE_TIMEOUT_MS) {
-            Serial.println(F("timeout single - powrot do NORMAL"));
-            app_set_mode(APP_MODE_NORMAL, 0);
-        }
-        break;
-
-    default: /* NORMAL */
-        if (next_tx_ms != UINT32_MAX && (int32_t)(now - next_tx_ms) >= 0) {
-            uint32_t iv = compute_interval();
-            tx_cycle();
-            next_tx_ms = now + (iv ? iv : 3600u) * 1000u;
-        }
-        if ((int32_t)(now - stay_awake_until) >= 0) {
-            go_sleep(compute_interval());
-        }
-        break;
+        go_sleep();
+    } else if (g_app->mode() == AppMode::NORMAL
+            && (int32_t)(millis() - stay_awake_until) >= 0) {
+        go_sleep();
     }
 }
