@@ -1,13 +1,11 @@
 #include "settings.h"
 
-#include <string.h>
-
 void settings_defaults(settings_t *out)
 {
     static const uint32_t ids[WHEEL_COUNT] = {
         0x2FC871u, 0x2EAAF9u, 0x3495ACu, 0x2FC780u,
     };
-    memset(out, 0, sizeof(*out));
+    *out = settings_t{};
     for (uint8_t i = 0; i < WHEEL_COUNT; ++i) {
         out->wheels[i].id = ids[i];
         out->wheels[i].pressure_kpa10 = 2600u;
@@ -124,7 +122,7 @@ uint32_t settings_crc32(const void *data, size_t len)
 
 void settings_make_blob(const settings_t *cfg, settings_blob_t *blob)
 {
-    memset(blob, 0, sizeof(*blob));
+    *blob = settings_blob_t{};
     blob->magic = SETTINGS_MAGIC;
     blob->version = SETTINGS_VERSION;
     blob->size = sizeof(blob->values);

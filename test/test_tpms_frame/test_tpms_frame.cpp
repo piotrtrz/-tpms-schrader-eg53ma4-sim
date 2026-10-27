@@ -1,144 +1,142 @@
-/*
- * test_tpms_frame.cpp - testy generatora ramek TPMS (natywne, bez sprzetu)
- *
- * Wektory odniesienia wygenerowane narzedziem tools/tpms_frame.py,
- * ktore jest zgodne bit-w-bit z dekoderem rtl_433 (schrader_EG53MA4)
- * oraz z referencyjnym nagraniem Schrader_EG53MA4_TPMS/01/gfile001.cu8.
- */
 #include <string.h>
 #include <unity.h>
-#include "config.h"
 #include "tpms_frame.h"
-
-static uint8_t hexval(char c)
-{
-    if (c >= '0' && c <= '9') return (uint8_t)(c - '0');
-    if (c >= 'a' && c <= 'f') return (uint8_t)(c - 'a' + 10);
-    return 0;
-}
-
-static void unhex(const char *hex, uint8_t *out)
-{
-    for (unsigned i = 0; hex[2 * i]; i++) {
-        out[i] = (uint8_t)((hexval(hex[2 * i]) << 4) | hexval(hex[2 * i + 1]));
-    }
-}
-
-struct vec_t {
-    uint32_t id;
-    uint16_t kpa10;
-    int8_t   temp_c;
-    const char *frame_hex;   // 30 bajtow bufora nadawczego
-};
 
 void setUp(void) {}
 void tearDown(void) {}
 
-static void test_frame_vectors(void)
-{
-    static const vec_t v[] = {
-        { 0x2FC871u, 2600,  23, "aaaaaaaaaaaaaaaaaaaacb4b2caaaaaad4aab3554b2ad4acd32acb2cd2cc" },
-        { 0x2FC871u,    0,  32, "aaaaaaaaaaaaaaaaaaaacb4b2caaaaaad4aab3554b2ad4acaaaacd32ab52" },
-        { 0x3495ACu, 2200,  -5, "aaaaaaaaaaaaaaaaaaaacb4b2caaaaaad4aab4cb2ccd334acd2aacd4b4aa" },
-        { 0x000001u, 6375,  85, "aaaaaaaaaaaaaaaaaaaacb4b2caaaaaad4aaaaaaaaaaaaad5555352caacc" },
-        { 0xABCDEEu, 2625,  24, "aaaaaaaaaaaaaaaaaaaacb4b2caaaaaad4ab33354b4d5352d32ccb34d2d2" },
-        { 0x2FC780u, 2580, -40, "aaaaaaaaaaaaaaaaaaaacb4b2caaaaaad4aab3554ad52aaad2d4aaaab32c" },
-    };
+struct capture_vector_t {
+    uint32_t id;
+    int16_t temp_c;
+    uint8_t temp_f;
+    uint8_t checksum;
+};
 
-    for (unsigned i = 0; i < sizeof(v) / sizeof(v[0]); i++) {
-        uint8_t got[TPMS_TX_BYTES];
-        uint8_t want[TPMS_TX_BYTES];
-        tpms_build_frame(got, v[i].id, v[i].kpa10, v[i].temp_c, 0x4C900070u, false);
-        unhex(v[i].frame_hex, want);
-        TEST_ASSERT_EQUAL_HEX8_ARRAY(want, got, TPMS_TX_BYTES);
+static void test_four_independent_capture_payloads(void)
+{
+    /* rtl_433_tests commit 1aa8c29, cztery nagrania, po 16 dekodowan.
+     * Wszystkie: flags=4c900070, pressure=0. Wartosci nie pochodza z generatora. */
+    static const capture_vector_t vectors[] = {
+        {0x2FC871u, 32, 90u, 0x0Eu},
+        {0x2EAAF9u, 32, 90u, 0x77u},
+        {0x3495ACu, 32, 90u, 0x1Bu},
+        {0x2FC780u, 33, 91u, 0x1Du},
+    };
+    for (uint8_t i = 0; i < 4u; ++i) {
+        uint8_t payload[TPMS_PAYLOAD_LEN];
+        TEST_ASSERT_TRUE(tpms_build_payload(payload, vectors[i].id, 0u,
+                                            (int8_t)vectors[i].temp_c, 0x4C900070u));
+        TEST_ASSERT_EQUAL_HEX32(vectors[i].id,
+                ((uint32_t)payload[4] << 16) | ((uint32_t)payload[5] << 8) | payload[6]);
+        TEST_ASSERT_EQUAL_HEX8(0x00, payload[7]);
+        TEST_ASSERT_EQUAL_HEX8(vectors[i].temp_f, payload[8]);
+        TEST_ASSERT_EQUAL_HEX8(vectors[i].checksum, payload[9]);
     }
 }
 
-static void test_reference_capture(void)
+static void test_known_frame_and_pressure_temperature(void)
 {
-    /* gfile001.cu8: id=2FC871, flags=4c900070, 0 kPa, 90 F, crc=0x0E */
-    uint8_t p[TPMS_PAYLOAD_LEN];
-    tpms_build_payload(p, 0x2FC871u, 0, 32, 0x4C900070u, false);
-    const uint8_t want[TPMS_PAYLOAD_LEN] = {
-        0x4C, 0x90, 0x00, 0x70, 0x2F, 0xC8, 0x71, 0x00, 0x5A, 0x0E
+    static const uint8_t expected[TPMS_TX_BYTES] = {
+        0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,
+        0xCB,0x4B,0x2C,0xAA,0xAA,0xAA,0xD4,0xAA,0xB3,0x55,
+        0x4B,0x2A,0xD4,0xAC,0xD3,0x2A,0xCB,0x2C,0xD2,0xCC,
     };
-    TEST_ASSERT_EQUAL_HEX8_ARRAY(want, p, TPMS_PAYLOAD_LEN);
+    uint8_t frame[TPMS_TX_BYTES];
+    uint8_t payload[TPMS_PAYLOAD_LEN];
+    TEST_ASSERT_TRUE(tpms_build_frame(frame, 0x2FC871u, 2600u, 23, 0x4C900070u));
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, frame, TPMS_TX_BYTES);
+    TEST_ASSERT_TRUE(tpms_build_payload(payload, 0x123456u, 2600u, 23, 0x4C900070u));
+    TEST_ASSERT_EQUAL_HEX8(0x68, payload[7]); /* 260 kPa / 2.5 = 104 */
+    TEST_ASSERT_EQUAL_UINT8(73u, payload[8]);
+    TEST_ASSERT_EQUAL_HEX8(0x99, payload[9]);
 }
 
-static void test_pressure_scale(void)
+static bool decode_strict(const uint8_t *frame, size_t length,
+                          uint8_t payload[TPMS_PAYLOAD_LEN])
 {
-    uint8_t p[TPMS_PAYLOAD_LEN];
-    /* 260 kPa = 2600 kPa*10 -> 2600/2.5 = 104 = 0x68 */
-    tpms_build_payload(p, 0x123456u, 2600, 23, 0x4C900070u, false);
-    TEST_ASSERT_EQUAL_HEX8(0x68, p[7]);
-    /* 23 C = 73 F */
-    TEST_ASSERT_EQUAL_HEX8(73, p[8]);
-    /* ograniczenie zakresu */
-    tpms_build_payload(p, 0x123456u, 65535, 127, 0x4C900070u, false);
-    TEST_ASSERT_EQUAL_HEX8(255, p[7]);
-    TEST_ASSERT_EQUAL_HEX8(255, p[8]);
-    tpms_build_payload(p, 0x123456u, 0, -99, 0x4C900070u, false);
-    TEST_ASSERT_EQUAL_HEX8(0, p[7]);
-    TEST_ASSERT_EQUAL_HEX8(0, p[8]);
-}
-
-static void test_pressure_rounding(void)
-{
-    uint8_t p[TPMS_PAYLOAD_LEN];
-    /* skala 2.5 kPa/bit = 25 kPa*10/bit, zaokraglenie w gore do pol bitu:
-     * bajt = (kpa10 + 12) / 25 */
-    tpms_build_payload(p, 1, 12, 0, 0x4C900070u, false);   // 1.2 kPa -> 0
-    TEST_ASSERT_EQUAL_HEX8(0, p[7]);
-    tpms_build_payload(p, 1, 13, 0, 0x4C900070u, false);   // 1.3 kPa -> 1
-    TEST_ASSERT_EQUAL_HEX8(1, p[7]);
-    tpms_build_payload(p, 1, 2588, 0, 0x4C900070u, false); // 258.8 kPa -> 104
-    TEST_ASSERT_EQUAL_HEX8(104, p[7]);
-    tpms_build_payload(p, 1, 2587, 0, 0x4C900070u, false); // 258.7 kPa -> 103
-    TEST_ASSERT_EQUAL_HEX8(103, p[7]);
-}
-
-static void test_checksum(void)
-{
-    uint8_t p[TPMS_PAYLOAD_LEN];
-    tpms_build_payload(p, 0x2FC871u, 2600, 23, 0x4C900070u, false);
-    unsigned sum = 0;
-    for (int i = 0; i < 9; i++) {
-        sum += p[i];
+    if (frame == NULL || length != TPMS_TX_BYTES || (frame[0] & 0x80u) == 0u) {
+        return false;
     }
-    TEST_ASSERT_EQUAL_HEX8(sum & 0xFF, p[9]);
+    uint8_t row[15] = {0};
+    unsigned chip = 1u;
+    for (unsigned bit = 1u; bit < TPMS_ROW_BITS; ++bit) {
+        unsigned first = (frame[chip >> 3] >> (7u - (chip & 7u))) & 1u;
+        unsigned second = (frame[(chip + 1u) >> 3] >> (7u - ((chip + 1u) & 7u))) & 1u;
+        if (first == second) {
+            return false;
+        }
+        unsigned value = first != 0u ? 1u : 0u;
+        row[bit >> 3] |= (uint8_t)(value << (7u - (bit & 7u)));
+        chip += 2u;
+    }
+    if ((frame[29] & 1u) != 0u) {
+        return false;
+    }
+    memcpy(payload, &row[5], TPMS_PAYLOAD_LEN);
+    uint8_t sum = 0;
+    for (uint8_t i = 0; i < 9u; ++i) sum = (uint8_t)(sum + payload[i]);
+    return sum == payload[9];
 }
 
-static void test_low_batt_flag(void)
+static void test_manchester_polarity_and_negative_frames(void)
 {
-    uint8_t a[TPMS_PAYLOAD_LEN], b[TPMS_PAYLOAD_LEN];
-    tpms_build_payload(a, 0x2FC871u, 2600, 23, 0x4C900070u, false);
-    tpms_build_payload(b, 0x2FC871u, 2600, 23, 0x4C900070u, true);
-    TEST_ASSERT_EQUAL_HEX32(0x4C900070u,
-            ((uint32_t)a[0] << 24) | (a[1] << 16) | (a[2] << 8) | a[3]);
-    TEST_ASSERT_TRUE((((uint32_t)b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3])
-                     & TPMS_FLAGS_LOWBAT_MASK);
+    uint8_t frame[TPMS_TX_BYTES];
+    uint8_t payload[TPMS_PAYLOAD_LEN];
+    TEST_ASSERT_TRUE(tpms_build_frame(frame, 0x2FC871u, 2600u, 23, 0x4C900070u));
+    TEST_ASSERT_TRUE(decode_strict(frame, sizeof(frame), payload));
+    TEST_ASSERT_EQUAL_HEX32(0x2FC871u,
+            ((uint32_t)payload[4] << 16) | ((uint32_t)payload[5] << 8) | payload[6]);
+
+    uint8_t damaged[TPMS_TX_BYTES];
+    memcpy(damaged, frame, sizeof(frame));
+    damaged[10] &= 0x3Fu; /* dwa jednakowe chipy: niedozwolony Manchester */
+    TEST_ASSERT_FALSE(decode_strict(damaged, sizeof(damaged), payload));
+    TEST_ASSERT_FALSE(decode_strict(frame, sizeof(frame) - 1u, payload));
+
+    memcpy(damaged, frame, sizeof(frame));
+    /* Zmien ostatnia komorke checksum z zachowaniem poprawnego Manchester. */
+    damaged[28] ^= 0x40u;
+    damaged[28] ^= 0x10u;
+    TEST_ASSERT_FALSE(decode_strict(damaged, sizeof(damaged), payload));
 }
 
-static void test_frame_layout(void)
+static void test_rounding_and_saturation(void)
 {
-    uint8_t f[TPMS_TX_BYTES];
-    tpms_build_frame(f, 0x2FC871u, 2600, 23, 0x4C900070u, false);
-    /* pierwszy bit = chip rozbiegowy '1' -> najstarszy bit pierwszego bajtu */
-    TEST_ASSERT_EQUAL_HEX8(0xAA, f[0]);
-    /* dlugosc stale: 240 chipow = 30 bajtow */
-    TEST_ASSERT_EQUAL_UINT32(30, TPMS_TX_BYTES);
+    uint8_t p[TPMS_PAYLOAD_LEN];
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 12u, 0, 0u));
+    TEST_ASSERT_EQUAL_UINT8(0u, p[7]);
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 13u, 0, 0u));
+    TEST_ASSERT_EQUAL_UINT8(1u, p[7]);
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 2588u, -40, 0u));
+    TEST_ASSERT_EQUAL_UINT8(104u, p[7]);
+    TEST_ASSERT_EQUAL_UINT8(0u, p[8]);
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 2587u, 85, 0u));
+    TEST_ASSERT_EQUAL_UINT8(103u, p[7]);
+    TEST_ASSERT_EQUAL_UINT8(185u, p[8]);
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 65535u, 127, 0u));
+    TEST_ASSERT_EQUAL_UINT8(255u, p[7]);
+    TEST_ASSERT_EQUAL_UINT8(255u, p[8]);
+}
+
+static void test_invalid_id_and_null_are_rejected(void)
+{
+    uint8_t p[TPMS_PAYLOAD_LEN];
+    TEST_ASSERT_FALSE(tpms_build_payload(p, 0u, 2600u, 23, 0u));
+    TEST_ASSERT_FALSE(tpms_build_payload(p, 0xFFFFFFu, 2600u, 23, 0u));
+    TEST_ASSERT_FALSE(tpms_build_payload(p, 0x1000000u, 2600u, 23, 0u));
+    TEST_ASSERT_FALSE(tpms_build_payload(NULL, 1u, 2600u, 23, 0u));
+    TEST_ASSERT_FALSE(tpms_build_frame(NULL, 1u, 2600u, 23, 0u));
 }
 
 int main(int argc, char **argv)
 {
-    (void)argc; (void)argv;
+    (void)argc;
+    (void)argv;
     UNITY_BEGIN();
-    RUN_TEST(test_frame_vectors);
-    RUN_TEST(test_reference_capture);
-    RUN_TEST(test_pressure_scale);
-    RUN_TEST(test_pressure_rounding);
-    RUN_TEST(test_checksum);
-    RUN_TEST(test_low_batt_flag);
-    RUN_TEST(test_frame_layout);
+    RUN_TEST(test_four_independent_capture_payloads);
+    RUN_TEST(test_known_frame_and_pressure_temperature);
+    RUN_TEST(test_manchester_polarity_and_negative_frames);
+    RUN_TEST(test_rounding_and_saturation);
+    RUN_TEST(test_invalid_id_and_null_are_rejected);
     return UNITY_END();
 }
