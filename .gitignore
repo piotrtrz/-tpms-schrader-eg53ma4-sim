@@ -1,6 +1,10 @@
 .pio/
 .vscode/
+.venv/
+.cache/
+artifacts/
 *.o
 *.elf
 *.bin
 __pycache__/
+*.pyc
