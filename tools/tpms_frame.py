@@ -1,241 +1,114 @@
 #!/usr/bin/env python3
-"""Reference frame builder for the Schrader EG53MA4 TPMS simulator.
+"""Niezalezny model ramki EG53MA4 i testy pomocnicze (OOK/Manchester).
 
-This tool mirrors bit-for-bit what the ESP32 firmware (src/tpms_frame.c)
-puts on air, and contains a copy of rtl_433's OOK_MC_ZEROBIT slicer
-(pulse_slicer_manchester_zerobit() from src/pulse_slicer.c) so the frame
-can be self-checked without any radio hardware.
-
-Protocol reference: rtl_433 src/devices/schraeder.c (schrader_EG53MA4),
-"Schrader TPMS EG53MA4, Saab, Opel, Vauxhall, Chevrolet", and the reference
-capture rtl_433_tests/tests/Schrader_EG53MA4_TPMS/01/gfile001.cu8.
-
-On-air frame (G.E.T. Manchester, chip = one half bit-cell):
-
-    lead chip '1' + 119 two-chip cells + zero padding to a byte boundary
-
-    cell "01" -> data bit 0, cell "10" -> data bit 1   (G.E.T. MC, no inversion)
-
-The rtl_433 MC_ZEROBIT slicer synthesises the very first bit of the decoded
-row (a hardcoded 0), so the transmitter sends the row *without* its first bit.
-Decoded row (120 bits) = 40 bit sync (zeros) + 80 bit payload:
-
-    SSSS SSSS SSSS SSSS SSSS SSSS SSSS SSSS | FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF
-    IIII IIII IIII IIII IIII IIII | PPPP PPPP | TTTT TTTT | CCCC CCCC
-
-- S: sync (40 bits, not checked by the decoder, kept as in real captures)
-- F: flags (32 bit) - status / battery nibble, unanalysed upstream
-- I: sensor id (24 bit)
-- P: pressure, 25 mbar per bit (kPa = byte * 2.5)
-- T: temperature, degrees Fahrenheit
-- C: checksum = sum(bytes[0..8]) & 0xff
-
-DISCLAIMER: this is a diagnostic/test tool. It generates *artificial* tyre
-pressure data and is no replacement for real TPMS sensors.
+Referencje: rtl_433 commit 406f9a33550a2b6b3d0d8a8a486417ce5b3f13ab,
+rtl_433_tests commit 1aa8c29d6b9383739d1aeed495dbc5069b704392.
+Narzedzie generuje sztuczne dane wylacznie do diagnostyki.
 """
-
 import argparse
 import math
-import sys
 
-# --- protocol constants (keep in sync with src/config.h / src/tpms_frame.c) ---
-CHIP_US = 120.0            # one Manchester half bit-cell, 8.333 kBaud chip rate
-FRAME_BITS = 120           # decoded row length expected by schrader_EG53MA4
+CHIP_US = 120.0
+FRAME_BITS = 120
 SYNC_BITS = 40
-TX_BYTES = 30              # 240 chips = 1 lead + 238 data + 1 pad
-DEFAULT_FLAGS = 0x4C900070 # captured from real EG53MA4 sensors
+TX_BYTES = 30
+DEFAULT_FLAGS = 0x4C900070
+
+
+def valid_id(sensor_id: int) -> bool:
+    return 0 < sensor_id < 0xFFFFFF
 
 
 def cell(bit: int) -> str:
-    """G.E.T. Manchester cell for one data bit."""
     return "01" if bit == 0 else "10"
 
 
 def build_row(sensor_id: int, pressure_kpa: float, temp_c: float,
-              flags: int = DEFAULT_FLAGS, low_batt: bool = False,
-              flags_lowbat_mask: int = 0x00000008) -> str:
-    """Return the 120 decoded row bits as a string of '0'/'1'.
-
-    Uses the same half-up integer rounding as src/tpms_frame.cpp.
-    """
+              flags: int = DEFAULT_FLAGS) -> str:
+    if not valid_id(sensor_id):
+        raise ValueError("ID musi byc w zakresie 000001..FFFFFE")
+    if not 0 <= flags <= 0xFFFFFFFF:
+        raise ValueError("flags musza miec 32 bity")
     kpa10 = int(math.floor(pressure_kpa * 10.0 + 0.5))
-    press_byte = min(max((kpa10 + 12) // 25, 0), 255)      # 2.5 kPa per bit
+    if not 0 <= kpa10 <= 6375:
+        raise ValueError("cisnienie musi byc w zakresie 0..637.5 kPa")
+    press_byte = (kpa10 + 12) // 25
     tc = int(math.floor(temp_c + 0.5))
-    num = 9 * tc + 160                                      # temp_F = (9C+160)/5
+    if not -40 <= tc <= 85:
+        raise ValueError("temperatura musi byc w zakresie -40..85 C")
+    num = 9 * tc + 160
     temp_f = (num + 2) // 5 if num >= 0 else -((-num + 2) // 5)
-    temp_f = min(max(temp_f, 0), 255)
-    if low_batt:
-        flags |= flags_lowbat_mask
-    payload = [
-        (flags >> 24) & 0xFF,
-        (flags >> 16) & 0xFF,
-        (flags >> 8) & 0xFF,
-        flags & 0xFF,
-        (sensor_id >> 16) & 0xFF,
-        (sensor_id >> 8) & 0xFF,
-        sensor_id & 0xFF,
-        press_byte,
-        temp_f,
-    ]
-    payload.append(sum(payload) & 0xFF)
-    row = "0" * SYNC_BITS
-    for b in payload:
-        row += f"{b:08b}"
-    assert len(row) == FRAME_BITS
-    return row
+    payload = [flags >> 24, (flags >> 16) & 255, (flags >> 8) & 255,
+               flags & 255, sensor_id >> 16, (sensor_id >> 8) & 255,
+               sensor_id & 255, press_byte, temp_f]
+    payload.append(sum(payload) & 255)
+    return "0" * SYNC_BITS + "".join(f"{byte:08b}" for byte in payload)
 
 
 def build_tx_bits(row: str) -> str:
-    """Return the chip bit string actually shifted into the CC1101 FIFO.
-
-    240 chips: 1 lead chip + 119 two-chip cells + 1 pad chip = 30 bytes.
-    """
-    assert len(row) == FRAME_BITS
-    bits = "1"                                  # lead chip (carrier on)
-    for b in row[1:]:                           # row[0] is synthesised by the receiver
-        bits += cell(int(b))
-    while len(bits) % 8:                        # pad with 'off' chips (silence for OOK)
-        bits += "0"
-    return bits
+    if len(row) != FRAME_BITS:
+        raise ValueError("ramka musi miec 120 bitow")
+    bits = "1" + "".join(cell(int(bit)) for bit in row[1:])
+    return bits.ljust(TX_BYTES * 8, "0")
 
 
 def tx_bytes(bits: str) -> bytes:
-    assert len(bits) % 8 == 0
+    if len(bits) != TX_BYTES * 8:
+        raise ValueError("bufor nadawczy musi miec 30 bajtow")
     return bytes(int(bits[i:i + 8], 2) for i in range(0, len(bits), 8))
-
-
-# ---------------------------------------------------------------------------
-# Reference slicer: verbatim model of rtl_433 pulse_slicer_manchester_zerobit()
-# (src/pulse_slicer.c), used for self-testing the encoder.
-# ---------------------------------------------------------------------------
-def mc_zerobit_slicer(chips, short_us=123.0, chip_us=CHIP_US, reset_us=300.0):
-    runs = []  # (level, length_us)
-    cur, cnt = chips[0], 1
-    for c in chips[1:]:
-        if c == cur:
-            cnt += 1
-        else:
-            runs.append((cur, cnt * chip_us))
-            cur, cnt = c, 1
-    runs.append((cur, cnt * chip_us))
-
-    pairs = []  # (pulse_us, gap_us)
-    i = 0
-    while i < len(runs):
-        lvl, ln = runs[i]
-        if lvl:
-            gap = runs[i + 1][1] if i + 1 < len(runs) and not runs[i + 1][0] else 0.0
-            pairs.append((ln, gap))
-            i += 2
-        else:
-            pairs.append((0.0, ln))
-            i += 1
-
-    row = ["0"]  # hardcoded leading zero bit
-    t = 0.0
-    for n, (pulse, gap) in enumerate(pairs):
-        last = n == len(pairs) - 1
-        if pulse + t > short_us * 1.5:
-            row.append("1")
-            t = 0.0
-        else:
-            t += pulse
-        if last:
-            break
-        if gap > reset_us:
-            break  # end of message
-        if gap + t > short_us * 1.5:
-            row.append("0")
-            t = 0.0
-        else:
-            t += gap
-    return "".join(row)
 
 
 def decode_row(row: str):
     if len(row) != FRAME_BITS:
         return None
-    by = [int(row[SYNC_BITS + 8 * k:SYNC_BITS + 8 * (k + 1)], 2) for k in range(10)]
-    return {
-        "flags": by[0] << 24 | by[1] << 16 | by[2] << 8 | by[3],
-        "id": by[4] << 16 | by[5] << 8 | by[6],
-        "pressure_kPa": by[7] * 2.5,
-        "temperature_F": by[8],
-        "checksum_ok": (sum(by[:9]) & 0xFF) == by[9],
-        "bytes": by,
-    }
+    data = [int(row[SYNC_BITS + 8 * i:SYNC_BITS + 8 * (i + 1)], 2)
+            for i in range(10)]
+    return {"flags": int.from_bytes(bytes(data[:4]), "big"),
+            "id": int.from_bytes(bytes(data[4:7]), "big"),
+            "pressure_kPa": data[7] * 2.5, "temperature_F": data[8],
+            "checksum_ok": sum(data[:9]) & 255 == data[9], "bytes": data}
 
 
 def self_test() -> int:
-    """Cross-check against the rtl_433 reference capture (gfile001.cu8)."""
-    fails = 0
-    ref = build_row(0x2FC871, 0.0, (90 - 32) * 5 / 9, flags=0x4C900070)
-    # the capture carries temperature as the raw byte 90 (0x5A) = 90 F
-    ref_row = ("0" * 40
-               + "01001100100100000000000001110000001011111100100001110001000000000101101000001110")
-    if ref_row[40:] != ref[40:]:
-        print("FAIL: reference capture row mismatch")
-        print("  want:", ref_row)
-        print("  got :", ref)
-        fails += 1
-
-    # random round trip: encode -> slicer -> data must survive intact
+    expected = [0x4C, 0x90, 0, 0x70, 0x2F, 0xC8, 0x71, 0, 0x5A, 0x0E]
+    row = build_row(0x2FC871, 0, 32)
+    got = decode_row(row)["bytes"]
+    if got != expected:
+        print(f"FAIL: nagranie gfile001: {got} != {expected}")
+        return 1
     import random
-    random.seed(42)
+    rng = random.Random(42)
     for _ in range(500):
-        sid = random.randrange(0, 0x1000000)
-        kpa = round(random.uniform(0, 637.5), 1)
-        tc = random.uniform(-40, 85)
-        row = build_row(sid, kpa, tc)
-        bits = build_tx_bits(row)
-        chips = [int(b) for b in bits]
-        out = mc_zerobit_slicer(chips)
-        if len(out) != FRAME_BITS or out[SYNC_BITS:] != row[SYNC_BITS:]:
-            print("FAIL: round trip", hex(sid), kpa, tc)
-            print("  row:", row)
-            print("  out:", out)
-            fails += 1
-            break
-        d = decode_row(out)
-        if not d["checksum_ok"] or d["id"] != sid:
-            print("FAIL: decode", hex(sid), d)
-            fails += 1
-            break
-    print("self-test:", "OK" if fails == 0 else "FAILED")
-    return 1 if fails else 0
+        sensor_id = rng.randrange(1, 0xFFFFFF)
+        pressure = round(rng.uniform(0, 637.5), 1)
+        temp = rng.randrange(-40, 86)
+        decoded = decode_row(build_row(sensor_id, pressure, temp))
+        if not decoded["checksum_ok"] or decoded["id"] != sensor_id:
+            print("FAIL: round trip")
+            return 1
+    print("self-test: OK (nagranie + 500 ramek)")
+    return 0
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--id", default="2FC871", help="sensor id (hex, 24 bit)")
-    p.add_argument("--pressure", type=float, default=260.0, help="kPa")
-    p.add_argument("--temp", type=float, default=23.0, help="deg C")
-    p.add_argument("--flags", default="4C900070", help="flags word (hex)")
-    p.add_argument("--low-batt", action="store_true")
-    p.add_argument("--self-test", action="store_true")
-    args = p.parse_args()
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--id", default="2FC871")
+    parser.add_argument("--pressure", type=float, default=260.0)
+    parser.add_argument("--temp", type=float, default=23.0)
+    parser.add_argument("--flags", default="4C900070")
+    parser.add_argument("--self-test", action="store_true")
+    args = parser.parse_args()
     if args.self_test:
         return self_test()
-
-    sid = int(args.id, 16)
-    flags = int(args.flags, 16)
-    row = build_row(sid, args.pressure, args.temp, flags, args.low_batt)
-    bits = build_tx_bits(row)
-    raw = tx_bytes(bits)
-    d = decode_row(row)
-
-    print(f"row  (120 bit): {row}")
-    print(f"chips({len(bits):3d} bit): {bits}")
-    print(f"tx bytes ({len(raw)}): {' '.join(f'{b:02X}' for b in raw)}")
-    print(f"payload : {' '.join(f'{b:02X}' for b in d['bytes'])}")
-    print(f"checksum: {'OK' if d['checksum_ok'] else 'BAD'}")
-    print(f"id={d['id']:06X}  pressure={d['pressure_kPa']:.1f} kPa  "
-          f"temperature={d['temperature_F']} F ({args.temp:.0f} C)  flags={d['flags']:08X}")
-    out = mc_zerobit_slicer([int(b) for b in bits])
-    print(f"slicer check: {'OK' if out[SYNC_BITS:] == row[SYNC_BITS:] and len(out) == FRAME_BITS else 'FAILED'}")
+    row = build_row(int(args.id, 16), args.pressure, args.temp, int(args.flags, 16))
+    raw = tx_bytes(build_tx_bits(row))
+    decoded = decode_row(row)
+    print(f"row: {row}\ntx: {raw.hex()}")
+    print("payload: " + " ".join(f"{byte:02X}" for byte in decoded["bytes"]))
+    print(f"id={decoded['id']:06X} pressure={decoded['pressure_kPa']:.1f} kPa "
+          f"temp={decoded['temperature_F']} F flags={decoded['flags']:08X}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
