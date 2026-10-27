@@ -1,5 +1,14 @@
 # Changelog
 
+## Zmiany robocze po 2.0.0-rc.1
+
+- Sprzęt docelowy zmieniono na ESP32-C3 SuperMini; zaktualizowano target
+  PlatformIO, natywne USB CDC, pinout SPI/przycisku/ADC i polaryzację wbudowanej LED.
+- Dodano zasilanie zewnętrzne przez LF33CV, jego właściwy pinout OUT–GND–IN,
+  kondensatory oraz wymagania ochrony i termiki dla zasilania z ACC.
+- Obrazy release dla ESP32-C3 używają `esptool --chip esp32c3` i bootloadera od
+  adresu `0x0`; stare obrazy dla ESP32-WROOM nie są kompatybilne.
+
 ## 2.0.0-rc.1 — 2026-10-27
 
 Release candidate bez testu fizycznego CC1101 i samochodu.

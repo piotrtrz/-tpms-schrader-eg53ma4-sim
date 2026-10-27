@@ -24,7 +24,7 @@ void ui_init(void)
 {
     pinMode(PIN_BUTTON, BTN_ACTIVE_LEVEL ? INPUT_PULLDOWN : INPUT_PULLUP);
     pinMode(PIN_LED, OUTPUT);
-    digitalWrite(PIN_LED, LOW);
+    digitalWrite(PIN_LED, LED_ACTIVE_LEVEL ? LOW : HIGH);
 
     uint32_t now = millis();
     bool raw = (digitalRead(PIN_BUTTON) == BTN_ACTIVE_LEVEL);
@@ -82,7 +82,7 @@ void ui_set_pattern(ui_pat_t pat)
     led_blinks_left = 0;
     led_on = false;
     led_series = false;
-    digitalWrite(PIN_LED, LOW);
+    digitalWrite(PIN_LED, LED_ACTIVE_LEVEL ? LOW : HIGH);
     led_next = millis();
 }
 
@@ -104,7 +104,7 @@ void ui_update(void)
     if (led_series) {
         if (led_on) {
             /* koniec migniecia */
-            digitalWrite(PIN_LED, LOW);
+            digitalWrite(PIN_LED, LED_ACTIVE_LEVEL ? LOW : HIGH);
             led_on = false;
             if (led_blinks_left > 0) {
                 led_blinks_left--;
@@ -113,7 +113,7 @@ void ui_update(void)
         }
         else if (led_blinks_left > 0) {
             /* kolejne migniecie */
-            digitalWrite(PIN_LED, HIGH);
+            digitalWrite(PIN_LED, LED_ACTIVE_LEVEL ? HIGH : LOW);
             led_on = true;
             led_next = now + 90;
         }
@@ -135,7 +135,7 @@ void ui_update(void)
 
     /* rozpoczynamy serie wg wzorca */
     if (led_pat == UI_PAT_OFF) {
-        digitalWrite(PIN_LED, LOW);
+        digitalWrite(PIN_LED, LED_ACTIVE_LEVEL ? LOW : HIGH);
         led_next = now + 50;
         return;
     }

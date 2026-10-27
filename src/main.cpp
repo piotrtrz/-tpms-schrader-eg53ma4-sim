@@ -155,7 +155,7 @@ static bool wake_sources_active(void)
         return true;
     }
 #if PIN_LF_TRIGGER >= 0
-    if (digitalRead(PIN_LF_TRIGGER) == HIGH) {
+    if (digitalRead(PIN_LF_TRIGGER) == LF_ACTIVE_LEVEL) {
         return true;
     }
 #endif
@@ -186,8 +186,8 @@ void setup(void)
     settings_store_begin();
     console_init();
 #if PIN_LF_TRIGGER >= 0
-    pinMode(PIN_LF_TRIGGER, INPUT_PULLDOWN);
-    lf_previous = digitalRead(PIN_LF_TRIGGER) == HIGH;
+    pinMode(PIN_LF_TRIGGER, INPUT_PULLUP);
+    lf_previous = digitalRead(PIN_LF_TRIGGER) == LF_ACTIVE_LEVEL;
 #endif
 #if PIN_ACC >= 0
     pinMode(PIN_ACC, INPUT);
@@ -208,10 +208,12 @@ void setup(void)
     }
 
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-    bool transmit = cause != ESP_SLEEP_WAKEUP_EXT0 && cause != ESP_SLEEP_WAKEUP_EXT1;
+    bool transmit = cause != ESP_SLEEP_WAKEUP_GPIO;
     g_app->begin(millis(), transmit);
 #if PIN_LF_TRIGGER >= 0
-    if (cause == ESP_SLEEP_WAKEUP_EXT1) {
+    uint64_t wake_mask = cause == ESP_SLEEP_WAKEUP_GPIO
+            ? esp_sleep_get_gpio_wakeup_status() : 0;
+    if ((wake_mask & (1ULL << PIN_LF_TRIGGER)) != 0) {
         g_app->send_current();
     }
 #endif
@@ -234,7 +236,7 @@ void loop(void)
     }
     console_poll();
 #if PIN_LF_TRIGGER >= 0
-    bool lf = digitalRead(PIN_LF_TRIGGER) == HIGH;
+    bool lf = digitalRead(PIN_LF_TRIGGER) == LF_ACTIVE_LEVEL;
     if (lf && !lf_previous) {
         g_app->send_current();
         app_stay_awake(BOOT_STAY_AWAKE_MS);

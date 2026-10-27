@@ -4,26 +4,30 @@
 
 #define FW_VERSION "2.0.0-rc.1"
 
-/* ESP32 DevKit + CC1101 433 MHz (3,3 V). */
-#define PIN_CC1101_SCK 18
-#define PIN_CC1101_MISO 19
-#define PIN_CC1101_MOSI 23
-#define PIN_CC1101_CS 5
-#define PIN_CC1101_GDO0 2
+/* ESP32-C3 SuperMini + CC1101 433 MHz (3,3 V). */
+#define PIN_CC1101_SCK 4
+#define PIN_CC1101_MISO 5
+#define PIN_CC1101_MOSI 6
+#define PIN_CC1101_CS 7
+#define PIN_CC1101_GDO0 10
 
-#define PIN_BUTTON 26
+#define PIN_BUTTON 3
 #define BTN_ACTIVE_LEVEL 0
-#define PIN_LED 27
+/* Wbudowana niebieska LED na GPIO8 jest aktywna stanem niskim. */
+#define PIN_LED 8
+#define LED_ACTIVE_LEVEL 0
 
 /* Opcje wylaczone do czasu zmontowania i przetestowania sprzetu. */
 #ifndef PIN_LF_TRIGGER
 #define PIN_LF_TRIGGER -1
 #endif
+/* LF dzieli z przyciskiem GPIO wakeup LOW na ESP32-C3. */
+#define LF_ACTIVE_LEVEL 0
 #ifndef PIN_ACC
 #define PIN_ACC -1
 #endif
 #ifndef PIN_VBAT_ADC
-#define PIN_VBAT_ADC 34
+#define PIN_VBAT_ADC 0
 #endif
 #define VBAT_DIVIDER_R1 1000000.0f
 #define VBAT_DIVIDER_R2 270000.0f

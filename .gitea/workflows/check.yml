@@ -13,7 +13,7 @@ jobs:
       - name: Install build dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential cmake git libusb-1.0-0-dev pkg-config ca-certificates
+          apt-get install -y --no-install-recommends build-essential cmake git libusb-1.0-0-dev librtlsdr-dev pkg-config ca-certificates
       - name: Install pinned Python tools
         run: pip install --no-cache-dir --disable-pip-version-check -r tools/requirements.txt
       - name: All tests without hardware

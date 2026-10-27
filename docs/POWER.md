@@ -3,9 +3,10 @@
 ## Status pomiarów
 
 **Nie wykonano pomiarów prądu fizycznego prototypu.** Liczby poniżej są
-szacunkami budżetu, nie wynikiem walidacji. DevKit nie nadaje się do deklaracji
-poboru µA, ponieważ mostek USB-UART, LED i regulator mogą pobierać ok. 0,5–2 mA
-lub więcej w zależności od płytki.
+szacunkami budżetu, nie wynikiem walidacji. SuperMini nie nadaje się do deklaracji
+poboru µA bez pomiaru: wbudowany regulator, LED i obwody pomocnicze zwiększają
+pobór. Sam LF33CV ma w stanie ON typowo ok. 0,5 mA prądu własnego (maks. 1 mA
+przy braku obciążenia), więc zasilanie stałe wymaga osobnego bilansu energetycznego.
 
 ## Harmonogram firmware
 
@@ -18,7 +19,8 @@ lub więcej w zależności od płytki.
 - Każdy sen ma budzik RTC. `PARKING_SHUTDOWN` usunięto — urządzenie nie może
   pozostać uśpione do czasu wyłącznie ręcznego wybudzenia.
 - ACC (opcjonalny sprzętowo) wybiera interwał ignition/parking. Nie jest potrzebne
-  jako jedyne źródło wybudzenia, ponieważ RTC zawsze działa.
+  jako jedyne źródło wybudzenia, ponieważ RTC zawsze działa. Jeżeli cały układ
+  zasilany jest tylko z ACC, po ACC OFF nie ma zasilania, RTC ani transmisji.
 
 ## Szacunek ładunku dla ustawień domyślnych
 
@@ -35,10 +37,10 @@ obietnica poboru z akumulatora 12 V.
 
 ## Metoda pomiaru wymagana przed „validated”
 
-1. **Cały DevKit w sleep:** miernik µA szeregowo na wejściu, nie przez USB.
+1. **Cały SuperMini w sleep:** miernik µA szeregowo na wejściu, nie przez USB.
    Odczekać do końca TX i zanotować minimum/stan stabilny oraz model płytki.
-2. **Goły moduł + zasilacz docelowy:** powtórzyć na wejściu 12 V i na 3,3 V.
-   Uwzględnić Iq regulatora, TVS, dzielniki i pull-upy.
+2. **SuperMini + LF33CV:** powtórzyć pomiar na zabezpieczonym wejściu VIN i na
+   szynie 3,3 V. Uwzględnić Iq regulatora, TVS, dzielniki i pull-upy.
 3. **Cykl NORMAL:** bocznik + oscyloskop albo logger z odpowiednim pasmem.
    Zarejestrować boot, 12 ramek, przerwy, wejście w sen przez co najmniej 10 cykli.
 4. **Średnia:** całkować ładunek co najmniej 15 min przy 30 s i 120 s. Podawać
@@ -50,7 +52,9 @@ obietnica poboru z akumulatora 12 V.
 ## Wnioski dopuszczalne przed pomiarem
 
 - Największy wpływ mają interwał, czas czuwania, PA i Iq całej płytki.
-- Do wersji energooszczędnej potrzebny jest goły ESP32 i zasilacz o niskim Iq.
+- Do wersji energooszczędnej trzeba zmierzyć cały SuperMini i LF33CV; przy
+  zasilaniu wyłącznie z ACC układ nie pobiera prądu po wyłączeniu zapłonu, ale
+  wtedy również nie nadaje w trybie parkingowym.
 - Nie rekomendujemy 18650 w kabinie ani wieloletniej pracy bateryjnej z ESP32.
 - Stały pobór emulatora trzeba uwzględnić przy długim postoju pojazdu; nie podajemy
   czasu „bezpiecznego dla akumulatora” bez pomiaru całego samochodu.

@@ -28,12 +28,12 @@ rtl_433_tests commit `1aa8c29…`. Pełne SHA znajdują się w `PROTOCOL.md`.
 | Komenda | Wynik |
 |---|---|
 | `pio test -e native` | **20/20 PASS** — ramka, cztery niezależne wektory, negatywne, NVS, fake clock/radio, Clone IDs, LEARN, SINGLE, ACC, restart |
-| `pio run -e esp32dev` | **PASS**, własne ostrzeżenia traktowane jako błędy (`-Werror`) |
+| `pio run -e esp32c3supermini` | **PASS**, własne ostrzeżenia traktowane jako błędy (`-Werror`) |
 | `pio check -e native ... --fail-on-defect=low` | **PASS**, 0 defektów po poprawce inicjalizacji struktur |
 | `python3 tools/tpms_frame.py --self-test` | **PASS**, nagranie + 500 ramek |
 | `tools/verify_rtl433.sh` | **PASS**, 64/64 rekordy referencyjne; 3/3 syntetyczne; 3/3 negatywne odrzucone |
 | `git diff --check` | **PASS** |
-| dwa czyste `tools/package_release.sh` | **PASS**, identyczne wszystkie 6 SHA-256 po ustawieniu `SOURCE_DATE_EPOCH=1761600000` |
+| `bash tools/package_release.sh` | **PASS**, obraz ESP32-C3 z bootloaderem od `0x0` i manifestem SHA-256 |
 
 Dane referencyjne: każdy z `gfile001`…`gfile004` dał dokładnie 16 zgodnych
 rekordów, z oczekiwanym ID/flags/ciśnieniem/temperaturą. Syntetyczne ramki
@@ -103,7 +103,7 @@ Katalog `artifacts/release/`:
 
 | Plik | Adres |
 |---|---:|
-| `bootloader.bin` | `0x1000` |
+| `bootloader.bin` | `0x0` — adres dla ESP32-C3, nie `0x1000` |
 | `partitions.bin` | `0x8000` |
 | `boot_app0.bin` | `0xE000` |
 | `firmware.bin` | `0x10000` |
@@ -117,8 +117,8 @@ samej aplikacji `firmware.bin` pod `0x10000` zwykle zachowuje NVS, ale przed
 release użytkownik powinien wykonać test na własnym module.
 
 ```bash
-PORT=/dev/ttyUSB0 bash tools/flash_release.sh
-sha256sum -c artifacts/release/SHA256SUMS
+PORT=/dev/ttyACM0 bash tools/flash_release.sh
+(cd artifacts/release && sha256sum -c SHA256SUMS)
 ```
 
 Nie wgrywaj obrazu z innego toolchaina na ślepo. RC nie zawiera fizycznego testu

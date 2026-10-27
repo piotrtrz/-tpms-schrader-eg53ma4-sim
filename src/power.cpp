@@ -57,13 +57,17 @@ void power_deep_sleep(uint32_t seconds)
     }
     esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
 
+#if PIN_BUTTON >= 0 || PIN_LF_TRIGGER >= 0
+    /* ESP32-C3 uzywa GPIO wakeup zamiast EXT0/EXT1. Oba wejscia sa
+     * aktywne nisko, wiec moga wspoldzielic jeden tryb GPIO_LOW. */
+    uint64_t wake_mask = 0;
 #if PIN_BUTTON >= 0
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BUTTON, BTN_ACTIVE_LEVEL);
+    wake_mask |= 1ULL << PIN_BUTTON;
 #endif
-
 #if PIN_LF_TRIGGER >= 0
-    uint64_t ext1_mask = 1ULL << PIN_LF_TRIGGER;
-    esp_sleep_enable_ext1_wakeup(ext1_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
+    wake_mask |= 1ULL << PIN_LF_TRIGGER;
+#endif
+    esp_deep_sleep_enable_gpio_wakeup(wake_mask, ESP_GPIO_WAKEUP_GPIO_LOW);
 #endif
     esp_deep_sleep_start();
 }

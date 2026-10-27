@@ -1,4 +1,4 @@
-# Symulator TPMS Schrader EG53MA4 — ESP32 + CC1101
+# Symulator TPMS Schrader EG53MA4 — ESP32-C3 SuperMini + CC1101
 
 **Wersja 2.0.0-rc.1 — release candidate bez walidacji sprzętowej.**
 
@@ -27,30 +27,36 @@ ogłoszenie sprzedażowe same w sobie nie potwierdzają profilu radiowego.
 ## Schemat ideowy
 
 ```text
- USB 5 V (TYLKO prototyp)       3,3 V                    OOK 433,92 MHz
-        │                         │                             │
- [ESP32 DevKit] ── SPI ───────> [CC1101 433 MHz] ── antena ────┘
-        │                         │
-        ├── GPIO26: przycisk      └── wspólna GND
-        └── GPIO27: LED + 330 Ω
+ Prototyp na biurku:
+ USB-C ──> [ESP32-C3 SuperMini] ── SPI ──> [CC1101 433 MHz] ──> antena
+                  │      │                     │
+                  │      └── GPIO3: przycisk   └── wspólna GND, tylko 3,3 V
+                  └── GPIO8: wbudowana LED (aktywna LOW)
 
- Konfiguracja: USB/UART 115200 → NVS → 4 × {ID, ciśnienie, temperatura}
+ Zasilanie zewnętrzne 3,3 V:
+ zabezpieczone VIN ──> [LF33CV] ──> 3V3 SuperMini + VCC CC1101
+
+ Konfiguracja: USB CDC 115200 → NVS → 4 × {ID, ciśnienie, temperatura}
 ```
 
-Nie podłączaj 12 V do GPIO, 3V3 ani VIN DevKit. Połączenia i wariant automotive:
-[HARDWARE](docs/HARDWARE.md).
+Wyjście LF33CV podłącz do **3V3, nie do 5V**. Nie podłączaj 12 V do GPIO, 3V3
+ani 5V. Przy zasilaniu zewnętrznym 3,3 V odłącz USB, chyba że separacja źródeł
+została sprawdzona w dokumentacji konkretnego egzemplarza płytki. Pełny pinout,
+kondensatory i zasady podłączenia „po stacyjce”: [HARDWARE](docs/HARDWARE.md).
 
 ## Quick Start
 
 ### 1. Złóż prototyp
 
 Kup elementy z [BOM](docs/HARDWARE.md#bom-prototypu-laboratoryjnego). Podłącz
-CC1101, przycisk i LED zgodnie z tabelą pinów. Zasil DevKit przez znany kabel USB
-na biurku. Nie montuj jeszcze niczego w samochodzie.
+CC1101 i przycisk zgodnie z tabelą pinów; LED jest już na płytce SuperMini.
+Na biurku zasil układ przez sprawdzony kabel USB-C z danymi. Nie montuj jeszcze
+niczego w samochodzie.
 
 ### 2. Zainstaluj narzędzia i sprawdź projekt
 
-Wymagane: Python 3, Git, CMake, kompilator C/C++, `pkg-config` i nagłówki libusb.
+Wymagane: Python 3, Git, CMake, kompilator C/C++, `pkg-config` oraz nagłówki
+libusb i librtlsdr.
 Najprościej użyć Dockera:
 
 ```bash
@@ -71,14 +77,16 @@ To nie jest test fizycznego radia.
 ### 3. Skompiluj i wgraj
 
 ```bash
-.venv/bin/pio run -e esp32dev
-.venv/bin/pio run -e esp32dev -t upload
+.venv/bin/pio run -e esp32c3supermini
+.venv/bin/pio run -e esp32c3supermini -t upload
 .venv/bin/pio device monitor --baud 115200
 ```
 
-Jeżeli port nie jest wykrywany automatycznie, dodaj `--upload-port /dev/ttyUSB0`
-(przy `run`) albo `--port /dev/ttyUSB0` (przy `device monitor`). W monitorze
-PlatformIO wyjście to zwykle `Ctrl+]`.
+Jeżeli port nie jest wykrywany automatycznie, dodaj `--upload-port /dev/ttyACM0`
+(przy `run`) albo `--port /dev/ttyACM0` (przy `device monitor`). Zależnie od
+systemu i trybu USB może to być również `/dev/ttyUSB0`. W monitorze PlatformIO
+wyjście to zwykle `Ctrl+]`. Jeśli upload nie startuje, przytrzymaj **BOOT**,
+naciśnij i puść **RESET**, następnie puść BOOT.
 
 Po uruchomieniu wpisz `stay 300` i Enter. Masz 5 minut na konfigurację; polecenie
 `info` pokazuje aktywne wartości. Każda zmiana konfiguracji jest od razu zapisywana
@@ -136,8 +144,8 @@ się po 5 min.
 
 ## Najczęstsze problemy
 
-- **`BLAD: brak CC1101`**: sprawdź 3,3 V, wspólną masę i sześć przewodów SPI;
-  nie używaj 5 V na CC1101.
+- **`BLAD: brak CC1101`**: sprawdź 3,3 V, wspólną masę oraz SCK/MISO/MOSI/CS
+  na GPIO4/5/6/7 i GDO0 na GPIO10; nie używaj 5 V na CC1101.
 - **Konsola znika przed wpisaniem komend**: po restarcie od razu `stay 300`;
   zwykłe wybudzenie RTC celowo nie otwiera okna konsoli.
 - **NVS zgłasza błąd**: urządzenie używa bezpiecznych domyślnych; wpisz `info`.
@@ -151,7 +159,7 @@ się po 5 min.
 - Protokół i niewiadome: [PROTOCOL](docs/PROTOCOL.md)
 - Dokładne wyniki i checklista HIL: [VALIDATION](docs/VALIDATION.md)
 - Pobór (na razie szacunki): [POWER](docs/POWER.md)
-- Wymagania zasilania 12 V: [HARDWARE](docs/HARDWARE.md#wariant-automotive--wymagania-niezwalidowany-projekt)
+- LF33CV i zasilanie „po stacyjce”: [HARDWARE](docs/HARDWARE.md#wariant-prąd-po-stacyjce--wymagania-niezwalidowany-projekt)
 - Zmiany: [CHANGELOG](CHANGELOG.md)
 
 Gotowe obrazy tworzy `bash tools/package_release.sh`. Pliki i adresy opisano w
