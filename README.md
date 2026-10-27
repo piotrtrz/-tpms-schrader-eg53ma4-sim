@@ -22,7 +22,7 @@ protokół **Schrader EG53MA4**).
 2. [Jak to działa](#2-jak-to-działa)
 3. [Budowa projektu](#3-budowa-projektu)
 4. [Kompilacja](#4-kompilacja)
-5. [(a) Okablowanie](#5-a-okablowanie)
+5. [(a) Okablowanie i lista podzespołów](#5-a-okablowanie)
 6. [(b) Konfiguracja ID i ciśnień](#6-b-konfiguracja-id-i-cisnień)
 7. [(c) Test nadawania — RTL-SDR + rtl_433](#7-c-test-nadawania--rtl-sdr--rtl_433)
 8. [(d) Programowanie czujników w aucie (tryb learn)](#8-d-programowanie-czujników-w-aucie-tryb-learn)
@@ -149,6 +149,57 @@ WSZYSTKO OK - ramki dekoduja sie poprawnie przez rtl_433
 ---
 
 ## 5. (a) Okablowanie
+
+### Lista podzespołów (BOM) — co kupić
+
+Koszty orientacyjne (zł, z dostawą z AliExpress/Allegro, stan na 2026 r.).
+Wystarczy **jedna sztuka** każdego podzespołu.
+
+**Obowiązkowe:**
+
+| Lp. | Podzespół | Parametry / typ | Uwagi | Koszt orient. |
+|-----|-----------|-----------------|-------|----------------|
+| 1   | ESP32 DevKit (WROOM-32) | moduł ESP32-WROOM-32, USB | Do testów na biurku OK. **Do montażu w aucie kup sam moduł ESP32-WROOM-32E** (bez mostka USB/LDO) + płytkę — patrz sekcja 13 o poborze prądu | 15–30 zł |
+| 2   | Moduł CC1101 **433 MHz** | 8-pin, SPI, złącze goldpin | Koniecznie wersja 433 MHz (nie 868/915); dokup/drut antenowy ~17 cm; sprawdzić złącze ANT | 10–25 zł |
+| 3   | Przycisk monostabilny | NO, wpuszczany lub panelowy | Tryby pracy (learn/single) | 2–5 zł |
+| 4   | LED + rezystor 330 Ω | LED 3 mm/5 mm dowolny kolor | Status trybów | 1–3 zł |
+| 5   | Rezystor 10 kΩ | 1 szt. | Podciągnięcie przycisku do 3V3 | < 1 zł |
+| 6   | Rezystory 100 kΩ + 33 kΩ | po 1 szt. | Dzielnik pomiaru napięcia (GPIO34) | < 1 zł |
+| 7   | Kondensatory | 100 µF/16 V elektrolityczny + 2× 100 nF ceramiczny | Odsprzężenie zasilania CC1101 i ESP32 (obowiązkowo przy długich przewodach) | 1–3 zł |
+| 8   | Bezpiecznik + uchwyt | 1 A, zwłoczny | Szeregowo z +12 V | 2–5 zł |
+| 9   | Przewody, złącza | goldpiny 2,54 mm, kostki, ekran SPI | Przewody SPI możliwie krótkie (< 10 cm) | 5–15 zł |
+| 10  | Obudowa | IP65, min. 80×60×30 mm | Montaż w komorze silnika/bagażniku | 10–25 zł |
+
+**Zasilanie — wybierz wariant (konfigurowalne w `config.h`, `POWER_SUPPLY_MODE`):**
+
+| Lp. | Podzespół | Parametry / typ | Uwagi | Koszt orient. |
+|-----|-----------|-----------------|-------|----------------|
+| 11a | **Wariant 12 V**: przetwornica buck o **bardzo niskim Iq** | TPS62740 (Iq ≈ 0,4 µA) lub gotowy moduł na TPS62740/TPS62742 | **Zwykłe tanie bucki (LM2596, MP1584, Mini360) mają Iq rzędu mA — nie nadają się** do trybu snu < 50 µA | 15–40 zł |
+| 11b | **Wariant 12 V** (alternatywa): LDO 3,3 V o niskim Iq | MCP1700-3302, HT7333 (Iq 1,6–3,5 µA) | Tylko jeśli spadek 12→3,3 V zaakceptujesz stratą mocy; prąd szczytowy ≥ 300 mA | 2–8 zł |
+| 12  | **Wariant bateryjny**: ogniwo 3,3–4,2 V | Li-SOCl2 3,6 V (AA/half-AA, np. ER14505) + uchwyt, albo LiPo 3,7 V | Bez przetwornicy; żywotność krótka przy interwale 30 s (patrz sekcja 13) | 10–30 zł |
+
+**Opcjonalne (ulepszenia i testy):**
+
+| Lp. | Podzespół | Parametry / typ | Uwagi | Koszt orient. |
+|-----|-----------|-----------------|-------|----------------|
+| 13  | Front-end LF 125 kHz | cewka rezonansowa (ferrytowa ramka z programatora TPMS), dioda Schottkyego (BAT54/1N5711), 100 pF + 100 kΩ, komparator LM393 | Reakcja na aktywację czujnika programatorem przy kole (`PIN_LF_TRIGGER`) | 10–30 zł |
+| 14  | Dzielnik ACC | 100 kΩ + 33 kΩ + 100 nF | Pomiar sygnału zapłonu 12 V na GPIO32 (tryb ignition-aware) | < 2 zł |
+| 15  | RTL-SDR (dongle) | R820T2/RTL2832U | Testy z `rtl_433` (sekcja 7) — można wypożyczyć | 60–150 zł |
+| 16  | Kabel USB + ew. programator | do wgrywania firmware | W DevKit kabel USB-A/Micro-USB wystarczy | 5–15 zł |
+
+**Narzędzia (do pomiarów, sekcja 9):** multimetr z zakresem µA (obowiązkowo do
+pomiaru snu), opcjonalnie INA219/INA226 lub oscyloskop do pomiaru prądu w burst.
+
+**Na skróty — zestaw minimalny „na biurko"** (testy RF + nauka): pozycje 1–10
+z wariantem 12 V lub zasilaniem z powerbanka 5 V przez DevKit (testy RF nie
+wymagają spełnienia budżetu prądu).
+
+Gdzie kupić: AliExpress (CC1101, TPS62740, ESP32), Allegro/sklepy elektroniczne
+(pasywne elementy, obudowa, bezpieczniki). Przy zamawianiu CC1101 sprawdź, czy
+moduł jest oznaczony **433 MHz** — wersje 868/915 MHz nie zadziałają bez
+przestrojenia.
+
+### Podłączenie
 
 | ESP32 DevKit | CC1101      | Uwagi                                  |
 |--------------|-------------|----------------------------------------|
