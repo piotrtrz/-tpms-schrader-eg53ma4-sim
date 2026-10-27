@@ -82,6 +82,21 @@ static void test_pressure_scale(void)
     TEST_ASSERT_EQUAL_HEX8(0, p[8]);
 }
 
+static void test_pressure_rounding(void)
+{
+    uint8_t p[TPMS_PAYLOAD_LEN];
+    /* skala 2.5 kPa/bit = 25 kPa*10/bit, zaokraglenie w gore do pol bitu:
+     * bajt = (kpa10 + 12) / 25 */
+    tpms_build_payload(p, 1, 12, 0, 0x4C900070u, false);   // 1.2 kPa -> 0
+    TEST_ASSERT_EQUAL_HEX8(0, p[7]);
+    tpms_build_payload(p, 1, 13, 0, 0x4C900070u, false);   // 1.3 kPa -> 1
+    TEST_ASSERT_EQUAL_HEX8(1, p[7]);
+    tpms_build_payload(p, 1, 2588, 0, 0x4C900070u, false); // 258.8 kPa -> 104
+    TEST_ASSERT_EQUAL_HEX8(104, p[7]);
+    tpms_build_payload(p, 1, 2587, 0, 0x4C900070u, false); // 258.7 kPa -> 103
+    TEST_ASSERT_EQUAL_HEX8(103, p[7]);
+}
+
 static void test_checksum(void)
 {
     uint8_t p[TPMS_PAYLOAD_LEN];
@@ -121,6 +136,7 @@ int main(int argc, char **argv)
     RUN_TEST(test_frame_vectors);
     RUN_TEST(test_reference_capture);
     RUN_TEST(test_pressure_scale);
+    RUN_TEST(test_pressure_rounding);
     RUN_TEST(test_checksum);
     RUN_TEST(test_low_batt_flag);
     RUN_TEST(test_frame_layout);

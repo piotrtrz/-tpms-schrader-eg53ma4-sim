@@ -13,12 +13,11 @@
 #include <esp_sleep.h>
 #include <driver/gpio.h>
 #include <esp32-hal-bt.h>
+#include <sys/time.h>
 
 #include "config.h"
 #include "power.h"
 #include "radio.h"
-
-RTC_DATA_ATTR static uint64_t rtc_elapsed_ms = 0;
 
 void power_init(void)
 {
@@ -65,12 +64,17 @@ void power_deep_sleep(uint32_t seconds)
     /* Budzik RTC. */
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
     if (seconds > 0) {
-        esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
+        if (esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL) != ESP_OK) {
+            Serial.println(F("power: blad konfiguracji budzika RTC"));
+        }
     }
 
     /* Przycisk jako zrodlo EXT0 (poziom konfigurowalny). */
 #if PIN_BUTTON >= 0
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BUTTON, BTN_ACTIVE_LEVEL);
+    if (esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BUTTON, BTN_ACTIVE_LEVEL)
+            != ESP_OK) {
+        Serial.println(F("power: blad konfiguracji EXT0 (pin nie RTC?)"));
+    }
 #endif
 
     /* Opcjonalne wejscie LF 125 kHz (impuls wysoki) jako EXT1.
@@ -81,7 +85,10 @@ void power_deep_sleep(uint32_t seconds)
     ext1_mask |= (1ULL << PIN_LF_TRIGGER);
 #endif
     if (ext1_mask != 0) {
-        esp_sleep_enable_ext1_wakeup(ext1_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
+        if (esp_sleep_enable_ext1_wakeup(ext1_mask, ESP_EXT1_WAKEUP_ANY_HIGH)
+                != ESP_OK) {
+            Serial.println(F("power: blad konfiguracji EXT1 (pin nie RTC?)"));
+        }
     }
 
     esp_deep_sleep_start();
@@ -89,10 +96,11 @@ void power_deep_sleep(uint32_t seconds)
 
 uint64_t power_elapsed_ms(void)
 {
-    return rtc_elapsed_ms;
-}
-
-void power_elapsed_add_ms(uint64_t delta_ms)
-{
-    rtc_elapsed_ms += delta_ms;
+    /* System time jest utrzymywany przez RTC i przywracany po deep sleep,
+     * wiec licznik rosnie o rzeczywisty czas (takze ten spedzony w snie),
+     * a nie o planowany interwal - wczesniejsze wybudzenia (przycisk/LF)
+     * nie zaklamuja wtedy logiki "5 min po zaniku ACC". */
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000u + (uint64_t)(tv.tv_usec / 1000);
 }

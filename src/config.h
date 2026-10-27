@@ -23,9 +23,19 @@
 
 /* ======================================================================
  *  1. ZASILANIE
- *  POWER_12V     - stale zasilanie z akumulatora 12 V przez buck/ LDO
- *                  o niskim pradzie spoczynkowym (np. TPS62740, Iq < 1 uA)
- *  POWER_BATTERY - ogniwo 3.3-4.2 V (Li-SOCl2 / LiPo) bez przetwornicy
+ *  POWER_12V     - stale zasilanie z akumulatora 12 V.
+ *      UWAGA: potrzebny jest uklad zasilajacy na PELENY zakres
+ *      samochodowy (12 V nominalnie, 14,4 V przy ladowaniu, przepiecia
+ *      load-dump nawet > 40 V):
+ *       - LDO o wejsciu >= 16 V i niskim Iq, np. MCP1703 (Vin 2.7-16 V,
+ *         Iq ~2 uA) - zabezpiecz wejscie bezpiecznikiem + TVS (np. 24 V)
+ *         + rezystor szeregowy/dioda; ogranicz moc strat (patrz README),
+ *       - albo przetwornica buck o szerokim wejsciu, np. LM5164-Q1
+ *         (Vin 6-100 V, Iq ~10 uA, 1 A).
+ *      TPS62740 ma wejscie 2.2-5.5 V - NIE wolno podlaczac go do 12 V!
+ *  POWER_BATTERY - ogniwo 3.6 V (Li-SOCl2) bezposrednio, albo LiPo 3.7 V
+ *      PRZEZ LDO 3.3 V (np. MCP1700, Vin max 6 V). Bezposrednie
+ *      zasilanie LiPo 4.2 V przekracza max ESP32 (3.6 V) i CC1101 (3.9 V)!
  * ====================================================================== */
 #define POWER_SUPPLY_MODE   POWER_12V
 #define POWER_12V           1
@@ -55,14 +65,21 @@
  * -1 wylacza funkcje (role pelni przycisk "aktywuj kolo"). */
 #define PIN_LF_TRIGGER      25
 
-/* Opcjonalny sygnal zaplonu / ACC (dzielnik 12 V -> 3.3 V). -1 = brak. */
-#define PIN_ACC             32
+/* Opcjonalny sygnal zaplonu / ACC (dzielnik 12 V -> ok. 3 V, jak VBAT).
+ * Bez podciagania wewnetrznego (INPUT) - dolna galaz dzielnika wymusza
+ * stan niski. Bez sygnalu: PIN_ACC = -1 (wtedy stale TX_INTERVAL_S).
+ * DOMYSLNIE -1 (wylaczone) - ustaw np. 32 po podlaczeniu dzielnika. */
+#define PIN_ACC             -1
 
-/* Pomiar napiecia zasilania: dzielnik R1(gora)/R2(dol) na pin ADC1.
- * Uwaga: GPIO34/35/32/33 = ADC1, mozliwe rowniez jako wejscia EXT. */
+/* Pomiar napiecia zasilania: dzielnik R1(gora)/R2(dol) na pin ADC1
+ * + kondensator 100 nF miedzy pinem a masa (ustalanie ADC).
+ * Dobor: 14,4 V (ladowanie) musi dac <= 3.0 V na wejsciu ADC,
+ * a prad dzielnika ma byc mikroamperowy (nie psuc budzetu snu):
+ *   R1 = 1 M, R2 = 270 k -> 12 V: 2.55 V (~9 uA), 14.4 V: 3.05 V
+ * Zabezpieczenie wejscia: rezystor szeregowy + dioda klamujaca do 3V3. */
 #define PIN_VBAT_ADC        34
-#define VBAT_DIVIDER_R1     100000.0f  // ohm, gora (do zasilania)
-#define VBAT_DIVIDER_R2     33000.0f   // ohm, dol (do masy)
+#define VBAT_DIVIDER_R1     1000000.0f // ohm, gora (do zasilania)
+#define VBAT_DIVIDER_R2     270000.0f  // ohm, dol (do masy)
 #define VBAT_CAL            1.000f     // mnoznik kalibracji (por. z multimetrem)
 #define VBAT_SAMPLES        16
 

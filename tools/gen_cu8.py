@@ -79,6 +79,10 @@ def main() -> int:
     print(f"frame: {len(bits)} chips, tx bytes:"
           f" {' '.join(f'{int(bits[i:i+8],2):02X}' for i in range(0, len(bits), 8))}")
 
+    out_dir = os.path.dirname(os.path.abspath(args.out))
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
     rng = random.Random(1)
     gap_sps = int(SAMPLE_RATE * args.gap_ms / 1000)
     out = []

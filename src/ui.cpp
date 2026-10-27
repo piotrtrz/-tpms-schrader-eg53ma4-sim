@@ -6,9 +6,12 @@
 #include "ui.h"
 
 /* ---------------------------- przycisk ---------------------------- */
+/* Debounce: nowy stan surowy musi sie utrzymac BTN_DEBOUNCE_MS, zanim
+ * zostanie uznany za stan stabilny (kandydat + czas jego zmiany). */
 
+static bool     btn_raw_last = false;    // ostatni surowy odczyt
+static uint32_t btn_raw_change = 0;      // czas ostatniej zmiany surowej
 static bool     btn_stable = false;      // stan po debounce
-static uint32_t btn_last_change = 0;
 static uint32_t btn_press_start = 0;
 static bool     btn_long_fired = false;  // bardzo dlugie zdarzenie juz wyslane
 
@@ -22,8 +25,14 @@ void ui_init(void)
     pinMode(PIN_BUTTON, BTN_ACTIVE_LEVEL ? INPUT_PULLDOWN : INPUT_PULLUP);
     pinMode(PIN_LED, OUTPUT);
     digitalWrite(PIN_LED, LOW);
-    btn_stable = (digitalRead(PIN_BUTTON) == BTN_ACTIVE_LEVEL);
-    btn_last_change = millis();
+
+    uint32_t now = millis();
+    bool raw = (digitalRead(PIN_BUTTON) == BTN_ACTIVE_LEVEL);
+    btn_raw_last = raw;
+    btn_raw_change = now;
+    btn_stable = raw;
+    btn_press_start = now;      // start z wcisnietym przyciskiem = poczatek gestu
+    btn_long_fired = false;
 }
 
 ui_event_t ui_poll(void)
@@ -32,20 +41,22 @@ ui_event_t ui_poll(void)
     bool raw = (digitalRead(PIN_BUTTON) == BTN_ACTIVE_LEVEL);
     uint32_t now = millis();
 
-    if (raw != btn_stable && (now - btn_last_change) >= BTN_DEBOUNCE_MS) {
-        btn_last_change = now;
-        btn_stable = raw;
+    if (raw != btn_raw_last) {
+        /* kandydat - czekaj az stan sie utrzyma */
+        btn_raw_last = raw;
+        btn_raw_change = now;
+    }
+    else if (raw != btn_stable && (now - btn_raw_change) >= BTN_DEBOUNCE_MS) {
+        btn_stable = raw;               // zaakceptowany po debounce
         if (btn_stable) {
             btn_press_start = now;
             btn_long_fired = false;
         }
-        else {
+        else if (!btn_long_fired) {
             uint32_t held = now - btn_press_start;
-            if (!btn_long_fired) {
-                if (held >= BTN_VERYLONG_MS)      ev = UI_EV_VERYLONG;
-                else if (held >= BTN_LONG_MS)     ev = UI_EV_LONG;
-                else                              ev = UI_EV_SHORT;
-            }
+            if (held >= BTN_VERYLONG_MS)      ev = UI_EV_VERYLONG;
+            else if (held >= BTN_LONG_MS)     ev = UI_EV_LONG;
+            else                              ev = UI_EV_SHORT;
         }
     }
 

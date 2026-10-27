@@ -109,9 +109,10 @@ pio test -e native             # testy generatora ramek (bez sprzętu)
 ```
 
 Biblioteka CC1101 (`SmartRC-CC1101-Driver-Lib`, dawniej
-`ELECHOUSE_CC1101_SRC_DRV`) jest pobierana automatycznie z `platformio.ini`.
-Kod obsługuje zarówno API 3.x (`setSpiPin`), jak i klasyczne 1.x/2.x
-(`setSCK`/`setMISO`/...), patrz `src/radio.cpp`.
+`ELECHOUSE_CC1101_SRC_DRV`) jest pobierana automatycznie z `platformio.ini`
+(przypięta do commita zweryfikowanego buildu). **Wymagana wersja ≥ 2.5.7**
+(wspólne API `setSpiPin`/`setGDO0` dla 2.5.x i 3.x; starsze 1.x używały
+`setSCK`/`setMISO`/... i nie są obsługiwane).
 
 ### arduino-cli (alternatywa)
 
@@ -164,7 +165,7 @@ Wystarczy **jedna sztuka** każdego podzespołu.
 | 3   | Przycisk monostabilny | NO, wpuszczany lub panelowy | Tryby pracy (learn/single) | 2–5 zł |
 | 4   | LED + rezystor 330 Ω | LED 3 mm/5 mm dowolny kolor | Status trybów | 1–3 zł |
 | 5   | Rezystor 10 kΩ | 1 szt. | Podciągnięcie przycisku do 3V3 | < 1 zł |
-| 6   | Rezystory 100 kΩ + 33 kΩ | po 1 szt. | Dzielnik pomiaru napięcia (GPIO34) | < 1 zł |
+| 6   | Rezystory 1 MΩ + 270 kΩ | po 2 szt. | Dzielniki pomiaru napięcia i ACC (~9 µA/szt. przy 12 V) | < 1 zł |
 | 7   | Kondensatory | 100 µF/16 V elektrolityczny + 2× 100 nF ceramiczny | Odsprzężenie zasilania CC1101 i ESP32 (obowiązkowo przy długich przewodach) | 1–3 zł |
 | 8   | Bezpiecznik + uchwyt | 1 A, zwłoczny | Szeregowo z +12 V | 2–5 zł |
 | 9   | Przewody, złącza | goldpiny 2,54 mm, kostki, ekran SPI | Przewody SPI możliwie krótkie (< 10 cm) | 5–15 zł |
@@ -174,16 +175,16 @@ Wystarczy **jedna sztuka** każdego podzespołu.
 
 | Lp. | Podzespół | Parametry / typ | Uwagi | Koszt orient. |
 |-----|-----------|-----------------|-------|----------------|
-| 11a | **Wariant 12 V**: przetwornica buck o **bardzo niskim Iq** | TPS62740 (Iq ≈ 0,4 µA) lub gotowy moduł na TPS62740/TPS62742 | **Zwykłe tanie bucki (LM2596, MP1584, Mini360) mają Iq rzędu mA — nie nadają się** do trybu snu < 50 µA | 15–40 zł |
-| 11b | **Wariant 12 V** (alternatywa): LDO 3,3 V o niskim Iq | MCP1700-3302, HT7333 (Iq 1,6–3,5 µA) | Tylko jeśli spadek 12→3,3 V zaakceptujesz stratą mocy; prąd szczytowy ≥ 300 mA | 2–8 zł |
-| 12  | **Wariant bateryjny**: ogniwo 3,3–4,2 V | Li-SOCl2 3,6 V (AA/half-AA, np. ER14505) + uchwyt, albo LiPo 3,7 V | Bez przetwornicy; żywotność krótka przy interwale 30 s (patrz sekcja 13) | 10–30 zł |
+| 11a | **Wariant 12 V**: LDO 3,3 V o niskim Iq i **wejściu ≥ 16 V** | np. **MCP1703-3302** (Vin 2,7–16 V, Iq ≈ 2 µA) | + zabezpieczenie wejścia: bezpiecznik, **TVS 24 V**, rezystor/dioda szeregowa (przepięcia load-dump!). Sprawdź moc strat: (14,4−3,3) V × ~30 mA ≈ 0,33 W — stosuj obudowę SOT-223/TO-92 i nie przeciążaj | 2–8 zł |
+| 11b | **Wariant 12 V** (wydajniejszy): buck o szerokim wejściu | np. **LM5164-Q1** (Vin 6–100 V, Iq ≈ 10 µA, 1 A) lub inny buck automotive | Wymaga cewki i płytki; **TPS62740 (Vin 2,2–5,5 V) i tanie bucki (LM2596, MP1584, Mini360, Iq mA) NIE nadają się do 12 V / snu < 50 µA** | 20–50 zł |
+| 12  | **Wariant bateryjny**: ogniwo 3,6 V lub LiPo | Li-SOCl2 3,6 V (AA/half-AA, np. ER14505) + uchwyt **bezposrednio**; LiPo 3,7 V **przez LDO 3,3 V** (np. MCP1700, Vin max 6 V) | **Nie zasilaj LiPo 4,2 V wprost** — max ESP32 to 3,6 V, CC1101 to 3,9 V! | 10–30 zł |
 
 **Opcjonalne (ulepszenia i testy):**
 
 | Lp. | Podzespół | Parametry / typ | Uwagi | Koszt orient. |
 |-----|-----------|-----------------|-------|----------------|
 | 13  | Front-end LF 125 kHz | cewka rezonansowa (ferrytowa ramka z programatora TPMS), dioda Schottkyego (BAT54/1N5711), 100 pF + 100 kΩ, komparator LM393 | Reakcja na aktywację czujnika programatorem przy kole (`PIN_LF_TRIGGER`) | 10–30 zł |
-| 14  | Dzielnik ACC | 100 kΩ + 33 kΩ + 100 nF | Pomiar sygnału zapłonu 12 V na GPIO32 (tryb ignition-aware) | < 2 zł |
+| 14  | Dzielnik ACC | 1 MΩ + 270 kΩ + 100 nF | Sygnał zapłonu 12 V → GPIO32 (tryb ignition-aware) | < 2 zł |
 | 15  | RTL-SDR (dongle) | R820T2/RTL2832U | Testy z `rtl_433` (sekcja 7) — można wypożyczyć | 60–150 zł |
 | 16  | Kabel USB + ew. programator | do wgrywania firmware | W DevKit kabel USB-A/Micro-USB wystarczy | 5–15 zł |
 
@@ -194,8 +195,8 @@ pomiaru snu), opcjonalnie INA219/INA226 lub oscyloskop do pomiaru prądu w burst
 z wariantem 12 V lub zasilaniem z powerbanka 5 V przez DevKit (testy RF nie
 wymagają spełnienia budżetu prądu).
 
-Gdzie kupić: AliExpress (CC1101, TPS62740, ESP32), Allegro/sklepy elektroniczne
-(pasywne elementy, obudowa, bezpieczniki). Przy zamawianiu CC1101 sprawdź, czy
+Gdzie kupić: AliExpress (CC1101, LM5164, ESP32), Allegro/sklepy elektroniczne
+(pasywne elementy, obudowa, bezpieczniki, TVS). Przy zamawianiu CC1101 sprawdź, czy
 moduł jest oznaczony **433 MHz** — wersje 868/915 MHz nie zadziałają bez
 przestrojenia.
 
@@ -219,26 +220,37 @@ Pozostałe elementy (numery pinów konfigurowalne w `config.h`):
 | Przycisk trybów         | GPIO26    | GPIO —— przycisk —— GND, rezystor 10 kΩ do 3V3 (aktywny niski, `BTN_ACTIVE_LEVEL 0`) |
 | LED statusowy           | GPIO27    | GPIO —— 330 Ω —— LED —— GND                     |
 | Wejście LF 125 kHz (opcjonalnie) | GPIO25 | wyjście detektora LF (impuls do 3,3 V), stan spoczynkowy **niski**; bez modułu: ustaw `PIN_LF_TRIGGER -1` |
-| ACC / zapłon (opcjonalnie) | GPIO32 | dzielnik 12 V → 3,3 V (100 kΩ / 33 kΩ), stan spoczynkowy niski; bez: `PIN_ACC -1` |
-| Pomiar napięcia         | GPIO34    | węzeł środkowy dzielnika `R1=100 kΩ / R2=33 kΩ` (ADC1) |
+| ACC / zapłon (opcjonalnie) | GPIO32 | dzielnik 12 V → ~3 V (1 MΩ / 270 kΩ + 100 nF), wejście **INPUT** (bez podciągania); **domyślnie wyłączone** (`PIN_ACC -1`) — ustaw 32 po podłączeniu |
+| Pomiar napięcia         | GPIO34    | węzeł środkowy dzielnika `R1=1 MΩ / R2=270 kΩ` (ADC1) + 100 nF |
 
 Zasilanie (wybór w `config.h`, `POWER_SUPPLY_MODE`):
 
 ```
- POWER_12V (na stałe z akumulatora):
-   +12 V (bezpiecznik 1 A) ── buck o Iq < 20 µA (np. TPS62740, Iq ≈ 0,4 µA)
+ POWER_12V (na stałe z akumulatora) - UWAGA: zakres samochodowy to nie
+                                      same "12 V": 14,4 V przy ladowaniu
+                                      i przepięcia load-dump > 40 V:
+   +12 V ──[bezpiecznik 1 A]──[TVS 24 V do masy]──[rezystor/dioda]── regulator
         ── 3,3 V ── ESP32 + CC1101
-   opcjonalnie LDO o niskim Iq (np. MCP1700, HT7333) jeśli pobór prądu
-   w transmisji mieści się w zakresie LDO (do ~250 mA).
 
- POWER_BATTERY (ogniwo 3,3–4,2 V, np. Li-SOCl2):
-   ogniwo ── 3V3 (bez przetwornicy). Uwaga: ESP32 wymaga ≥ 3,0 V pod obciążeniem.
+   Regulator (wybierz jeden):
+   - LDO o Iq ~2 µA i wejściu >= 16 V, np. MCP1703-3302
+     (straty: (14,4-3,3) V x ~30 mA = ~0,33 W - zwróć uwagę na obudowę),
+   - albo buck automotive o szerokim wejściu, np. LM5164-Q1 (6-100 V,
+     Iq ~10 µA) - wydajniejszy, wymaga cewki.
+   TPS62740 (Vin 2,2-5,5 V!) i tanie bucki (LM2596/MP1584/Mini360, Iq mA)
+   NIE nadają się do tej aplikacji.
+
+ POWER_BATTERY:
+   Li-SOCl2 3,6 V ── bezposrednio 3V3 (ESP32 wymaga >= 3,0 V pod obciazeniem)
+   LiPo 3,7 V     ── PRZEZ LDO 3,3 V (np. MCP1700). Bezposrednie zasilanie
+                     LiPo 4,2 V przekracza max ESP32 (3,6 V) i CC1101 (3,9 V)!
 ```
 
 ```
-            +12V ──[bezpiecznik]──> buck IN
-   Pomiar:  +12V ──[R1 100k]──+── GPIO34
-                              └──[R2 33k]── GND
+            +12V ──[bezpiecznik]──[TVS]──> regulator IN
+   Pomiar:  +12V ──[R1 1M]──+── GPIO34 ( + 100 nF do masy )
+                            └──[R2 270k]── GND
+   (12 V -> 2,55 V, 14,4 V -> 3,05 V, prad dzielnika ~9 uA)
 ```
 
 Ważne:
@@ -357,11 +369,14 @@ rtl_433 -f 433.92M -X 'n=schrader,m=FSK_MC_ZEROBIT,s=120,l=120,r=300'
 
 ### Sterowanie (przycisk `PIN_BUTTON`)
 
-| Gest                     | Tryb NORMAL              | Tryb LEARN / SINGLE      |
-|--------------------------|--------------------------|--------------------------|
-| krótkie naciśnięcie      | natychmiast burst 4 kół  | **następne koło**        |
-| długie (≥1,5 s)          | wejście do **LEARN**     | wyjście do NORMAL        |
-| bardzo długie (≥4 s)     | wejście do **SINGLE**    | wyjście do NORMAL        |
+| Gest                     | Tryb NORMAL              | Tryb LEARN               | Tryb SINGLE              |
+|--------------------------|--------------------------|--------------------------|--------------------------|
+| krótkie naciśnięcie      | natychmiast burst 4 kół  | **następne koło**        | **następne koło**        |
+| długie (≥1,5 s)          | → **LEARN**              | → NORMAL                 | → LEARN                  |
+| bardzo długie (≥4 s)     | → **SINGLE**             | → SINGLE                 | → NORMAL                 |
+
+(Przycisk nie jest drzemany przy wciśniętym — urządzenie nie wejdzie w sen,
+dopóki go nie puścisz; bardzo długi gest zdąży się zawsze zarejestrować.)
 
 LED: seria **N mrugnięć = N-ty numer koła** (1–4) przy zmianie koła,
 wzorzec stały: NORMAL — 1 mrugnięcie co 2 s, LEARN — 3 mrugnięcia co 0,5 s,
@@ -452,12 +467,16 @@ wielokrotnymi próbami):
 
 * **DevKit z USB-UART**: mostek CP2102/CH340 + LDO AMS1117 = 0,5–2 mA
   w sleep → cel < 50 µA **niedotrzymany z winy płytki**, nie firmware'u.
-  Rozwiązanie: goły moduł ESP32-WROOM + buck TPS62740 (Iq ≈ 0,4 µA)
-  lub LDO MCP1700/HT7333.
+  Rozwiązanie: goły moduł ESP32-WROOM + regulator z sekcji 5
+  (MCP1703/ LM5164-Q1 dla 12 V, MCP1700 dla LiPo).
+* **Dzielniki pomiarowe**: 2 × 1 MΩ/270 kΩ ≈ 19 µA stale — to już połowa
+  budżetu < 50 µA; w wariancie bateryjnym możesz je całkowicie odpiąć
+  (`PIN_VBAT_ADC -1` nie jest obsługiwany — po prostu nie montuj dzielnika
+  i zignoruj odczyt) albo zwiększyć rezystancje kosztem dokładności ADC.
 * Rezystor podciągający przycisku (10 kΩ) pobiera 330 µA przy stanie
   aktywnym niskim — w sleep przycisk jest w stanie spoczynkowym (HIGH),
   więc prąd nie płynie; gdybyś użył aktywnego HIGH, zwiększ rezystor do 100 kΩ.
-* LED — w sleep zgaszony (firmware go gasi).
+* LED — w sleep zgaszony (firmware go gasi przed snem).
 
 ---
 
@@ -550,8 +569,10 @@ FL payload: 4C 90 00 70 2F C8 71 68 49 65  crc=65 id=2FC871 press=260.0 kPa temp
 Założenia: burst = 4 koła × 3 ramki, ramka na antenie 240 chipów × 120 µs
 = **28,8 ms**, przerwa 50 ms między ramkami; wybudzenie + konfiguracja CC1101
 + ADC ≈ 1,2 s aktywności na cykl; ESP32 aktywny ~80 mA, CC1101 TX ~30 mA
-(+10 dBm), CC1101 idle ~15 mA, deep sleep ~12 µA (ESP32 ~10 µA + CC1101
-< 1 µA + buck TPS62740 ~0,4 µA).
+(+10 dBm), CC1101 idle ~15 mA, deep sleep ≈ 15 µA (ESP32 ~10 µA + CC1101
+< 1 µA + Iq regulatora) **+ ~19 µA na dzielnikach pomiarowych**
+(2 × 1 MΩ/270 kΩ). Przeliczenia poniżej robione są jednym wzorem:
+pobór z 12 V = pobór na szynie 3,3 V × (3,3/12) / sprawność regulatora (0,9).
 
 **Cykl co 30 s** (2880 cykli/dobę):
 
@@ -560,37 +581,38 @@ Założenia: burst = 4 koła × 3 ramki, ramka na antenie 240 chipów × 120 µs
 | ESP32 aktywny (80 mA × 1,2 s)         | 1,2 s              | 96 mAs ≈ 27 µAh |
 | CC1101 TX (30 mA × 0,35 s)            | 0,35 s             | 10 mAs ≈ 3 µAh  |
 | CC1101 idle/reszta (15 mA × 0,85 s)   | 0,85 s             | 13 mAs ≈ 4 µAh  |
-| deep sleep (12 µA × 25 s)             | 25 s               | 0,08 µAh        |
+| deep sleep + dzielniki (~34 µA × 30 s)| 30 s               | ≈ 0,3 µAh       |
 | **Razem**                             |                    | **≈ 34 µAh/cykl** |
 
-* **Dobowy pobór: 34 µAh × 2880 ≈ 98 mAh/dobę → średnio ≈ 4 mA**
-  (przy 3,3 V ≈ 13 mW).
-* Przy zasilaniu 12 V przez buck (sprawność ~90%): **≈ 27 mAh/dobę
-  z akumulatora** (średnio ≈ 1,1 mA przy 12 V).
+* **Dobowy pobór na szynie 3,3 V: 34 µAh × 2880 ≈ 98 mAh/dobę**
+  (średnio ≈ 4 mA).
+* Przy zasilaniu 12 V (sprawność 90%): **≈ 30 mAh/dobę z akumulatora**
+  (98 × 3,3/12/0,9 = 30; średnio ≈ 1,25 mA przy 12 V).
 
 **Akumulator 60 Ah (Pb), bez innych odbiorników:**
 
 * prąd potrzebny do rozruchu wymaga napięcia > ~11,8 V, czyli ~50% pojemności
   = 30 Ah użyteczne,
-* 30 000 mAh / 27 mAh ≈ **1100 dni ≈ 3 lata** — teoretycznie;
+* 30 000 mAh / 30 mAh ≈ **1000 dni ≈ 2,7 roku** — teoretycznie;
 * **w praktyce granicą jest samorozładowanie akumulatora kwasowego
   (3–5%/mies.)** — akumulator bez odbiorników rozładowuje się w 6–12 mies.,
   więc symulator **nie jest czynnikiem limitującym**.
 
-**Warianty oszczędne:**
+**Warianty oszczędne** (pobór z 12 V z uwzględnieniem sprawności 0,9):
 
 | Interwał | Średni prąd (3,3 V) | Dobowy pobór (12 V) | 60 Ah (30 Ah użyteczne) |
 |----------|--------------------|--------------------|--------------------------|
-| 30 s     | ~4 mA              | ~27 mAh/dobę       | ~3 lata*                 |
-| 120 s (parking) | ~1,2 mA     | ~8 mAh/dobę        | ~10 lat*                 |
-| 300 s    | ~0,5 mA            | ~3,5 mAh/dobę      | ogranicza samorozładowanie |
+| 30 s     | ~4 mA              | ~30 mAh/dobę       | ~2,7 roku*               |
+| 120 s (parking) | ~1 mA       | ~8 mAh/dobę        | ~10 lat*                 |
+| 300 s    | ~0,4 mA            | ~3,5 mAh/dobę      | ogranicza samorozładowanie |
 
 \* przed samorozładowaniem akumulatora.
 
-**Wariant bateryjny** (Li-SOCl2 3,6 V 2400 mAh): ~98 mAh/dobę przy 30 s
-to ok. **25 dni** — do zasilania bateryjnego stosuj dłuższe interwały
-(300 s → ok. 150 dni) albo mniejszą liczbę ramek w burście
-(`TX_BURST_FRAMES 2`), lub tryb `PARKING_SHUTDOWN 1`.
+**Wariant bateryjny** (Li-SOCl2 3,6 V 2400 mAh, bez strat przetwornicy):
+~98 mAh/dobę przy 30 s to ok. **24 dni**; przy 300 s ~10 mAh/dobę to ok.
+**240 dni (~8 mies.)**. Do zasilania bateryjnego stosuj dłuższe interwały,
+mniejszą liczbę ramek w burście (`TX_BURST_FRAMES 2`) albo
+`PARKING_SHUTDOWN 1`.
 
 Wskazówki: zmniejsz `TX_BURST_FRAMES`, wydłuż interwał, użyj mocy TX
 `TPMS_TX_POWER_DBM 0` (wystarczy w aucie), ustaw `PARKING_SHUTDOWN 1`
@@ -663,9 +685,10 @@ Weryfikacja implementacji (bez sprzętu):
 ## Wersje
 
 * `CONFIG_VERSION` w `src/config.h` — podnieś przy zmianie formatu danych
-  w pamięci RTC (stan trybów przetrwuje deep sleep).
-* Firmware testowany z: PlatformIO `espressif32`, Arduino core ESP32,
-  `SmartRC-CC1101-Driver-Lib 3.x` (kompatybilny z 1.x/2.x), rtl_433 (master).
+  w pamięci RTC (magic RTC zawiera tę wersję, więc stan zostanie wyzerowany).
+* Firmware testowany z: PlatformIO `espressif32@8.0.0`, Arduino core ESP32,
+  `SmartRC-CC1101-Driver-Lib` commit `de6757e` (3.0.2, wymagane ≥ 2.5.7),
+  rtl_433 (master).
 
 **Pamiętaj: symulator generuje sztuczne dane ciśnienia i nie zastępuje
 prawdziwych czujników TPMS.**

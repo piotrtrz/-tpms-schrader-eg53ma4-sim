@@ -20,19 +20,17 @@
 
 static bool radio_ok = false;
 
+/* ------------------------------------------------------------------ */
+/*  Inicjalizacja pinow                                                */
+/*  Wymagana biblioteka SmartRC-CC1101-Driver-Lib >= 2.5.7             */
+/*  (wspolne API setSpiPin/setGDO0 dla wersji 2.5.x i 3.x;             */
+/*   starsze 1.x mialy setSCK/setMISO/... - nie sa obslugiwane).       */
+/* ------------------------------------------------------------------ */
 static void radio_set_pins(void)
 {
-#if defined(SMARTRC_CC1101_H)   /* SmartRC-CC1101-Driver-Lib 3.x */
     ELECHOUSE_cc1101.setSpiPin(PIN_CC1101_SCK, PIN_CC1101_MISO,
                                PIN_CC1101_MOSI, PIN_CC1101_CS);
     ELECHOUSE_cc1101.setGDO0(PIN_CC1101_GDO0);
-#else                            /* klasyczne ELECHOUSE_CC1101_SRC_DRV 1.x/2.x */
-    ELECHOUSE_cc1101.setSCK(PIN_CC1101_SCK);
-    ELECHOUSE_cc1101.setMISO(PIN_CC1101_MISO);
-    ELECHOUSE_cc1101.setMOSI(PIN_CC1101_MOSI);
-    ELECHOUSE_cc1101.setCS(PIN_CC1101_CS);
-    ELECHOUSE_cc1101.setGDO0(PIN_CC1101_GDO0);
-#endif
 }
 
 bool radio_init(void)
@@ -80,10 +78,10 @@ bool radio_init(void)
     return true;
 }
 
-void radio_send_frame(const uint8_t *buf, uint8_t len)
+bool radio_send_frame(const uint8_t *buf, uint8_t len)
 {
     if (!radio_ok) {
-        return;
+        return false;
     }
 
     ELECHOUSE_cc1101.SpiStrobe(CC1101_SIDLE);
@@ -91,31 +89,51 @@ void radio_send_frame(const uint8_t *buf, uint8_t len)
     ELECHOUSE_cc1101.SpiWriteBurstReg(CC1101_TXFIFO, (uint8_t *)buf, len);
     ELECHOUSE_cc1101.SpiStrobe(CC1101_STX);
 
-    /* Czekamy az caly bufor wyjdzie na antene: FIFO puste + margines na
-     * ostatni chip. Blokada krotka (~30 ms) i niezbedna do zakonczenia
-     * transmisji - poza tym petla glowna nie uzywa delay(). */
-    uint32_t air_us = (uint32_t)len * 8u * (uint32_t)TPMS_CHIP_US + 3000u;
+    /* Pelny czas serializacji bufora na antenie: sprzet wysyla dokladnie
+     * len*8 chipow z predkoscia DRate. UWAGA: TXBYTES == 0 NIE oznacza
+     * konca transmisji - po oproznieniu FIFO ostatni bajt jest dopiero
+     * w rejestrze przesuwnym (8 chipow = 8*TPMS_CHIP_US), wiec wczesniejsze
+     * SIDLE obcialoby ogon ramki. Czekamy zatem na policzony czas + maly
+     * margines i dopiero wtedy wychodzimy z TX. */
+    uint32_t air_us = (uint32_t)len * 8u * (uint32_t)TPMS_CHIP_US + 1000u;
     uint32_t t0 = micros();
     while ((uint32_t)(micros() - t0) < air_us) {
-        uint8_t txb = ELECHOUSE_cc1101.SpiReadStatus(CC1101_TXBYTES);
-        if ((txb & 0x7Fu) == 0) {
-            delayMicroseconds(2u * TPMS_CHIP_US);   // ostatni chip na antenie
-            break;
-        }
+        delayMicroseconds(500);
+    }
+
+    /* Diagnostyka po zakonczeniu: dwa zgodne odczyty (errata CC1101),
+     * kontrola niedopelnienia FIFO i tego, czy bufor zostal faktycznie
+     * wyslany. Zwracamy blad zamiast udawac sukces. */
+    bool ok = true;
+    uint8_t txb = ELECHOUSE_cc1101.SpiReadStatus(CC1101_TXBYTES);
+    uint8_t txb2 = ELECHOUSE_cc1101.SpiReadStatus(CC1101_TXBYTES);
+    if (txb != txb2) {
+        txb = txb2;
+    }
+    if (txb & 0x80u) {          // TXFIFO_UNDERFLOW
+        ok = false;
+    }
+    if ((txb & 0x7Fu) != 0) {   // cos zostalo w FIFO - transmisja nie wyszla
+        ok = false;
     }
 
     ELECHOUSE_cc1101.SpiStrobe(CC1101_SIDLE);
     ELECHOUSE_cc1101.SpiStrobe(CC1101_SFTX);
+    return ok;
 }
 
-void radio_send_burst(const uint8_t *buf, uint8_t len, uint8_t frames)
+bool radio_send_burst(const uint8_t *buf, uint8_t len, uint8_t frames)
 {
+    bool ok = true;
     for (uint8_t i = 0; i < frames; i++) {
-        radio_send_frame(buf, len);
+        if (!radio_send_frame(buf, len)) {
+            ok = false;
+        }
         if (i + 1u < frames) {
             delay(TX_FRAME_GAP_MS);
         }
     }
+    return ok;
 }
 
 void radio_sleep(void)

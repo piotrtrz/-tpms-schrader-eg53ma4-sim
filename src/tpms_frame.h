@@ -37,6 +37,15 @@ extern "C" {
 #define TPMS_TX_BYTES     30    // 240 chipow = 1 lead + 238 danych + 1 padding
 #define TPMS_TX_CHIPS     (TPMS_TX_BYTES * 8)
 
+#ifdef __cplusplus
+/* Zaleznosc bufora nadawczego od dlugosci ramki: 1 chip rozbiegowy +
+ * 2 chipy na kazdy z (TPMS_ROW_BITS-1) bitow (pierwszy bit dopisuje
+ * odbiornik) + padding do granicy bajtu (< 8 chipow). */
+static_assert(TPMS_TX_CHIPS >= 1 + 2 * (TPMS_ROW_BITS - 1)
+              && TPMS_TX_CHIPS < 1 + 2 * (TPMS_ROW_BITS - 1) + 8,
+              "TPMS_TX_BYTES musi miescic 1 + 2*(TPMS_ROW_BITS-1) chipow");
+#endif
+
 typedef struct {
     uint32_t id;             // 24-bit identyfikator czujnika
     uint16_t press_kpa10;    // cisnienie w kPa * 10 (np. 2600 = 260.0 kPa)

@@ -24,10 +24,11 @@ bool power_low_battery(uint32_t mV);
  * przycisk/LF). Funkcja nie wraca. */
 void power_deep_sleep(uint32_t seconds);
 
-/* Suma czasu pracy [ms] od pierwszego uruchomienia - licznik w RTC
- * przetrwuje deep sleep; uzywane do logiki "5 min po zaniku ACC". */
+/* Czas rzeczywisty [ms] od startu systemu - licznik RTC przetrwuje deep
+ * sleep (ESP32 przywraca czas z RTC po wybudzeniu), wiec rosnie o rzeczywisty
+ * czas spedzony w snie, nie o planowany interwal. Uzywane do logiki
+ * "5 min po zaniku ACC". */
 uint64_t power_elapsed_ms(void);
-void power_elapsed_add_ms(uint64_t delta_ms);
 
 #ifdef __cplusplus
 }

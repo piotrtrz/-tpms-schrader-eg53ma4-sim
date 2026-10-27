@@ -42,7 +42,7 @@ import sys
 CHIP_US = 120.0            # one Manchester half bit-cell, 8.333 kBaud chip rate
 FRAME_BITS = 120           # decoded row length expected by schrader_EG53MA4
 SYNC_BITS = 40
-TX_BYTES = 31              # 1 lead chip + 238 data chips + 9 pad chips = 248 chips
+TX_BYTES = 30              # 240 chips = 1 lead + 238 data + 1 pad
 DEFAULT_FLAGS = 0x4C900070 # captured from real EG53MA4 sensors
 
 
@@ -86,7 +86,10 @@ def build_row(sensor_id: int, pressure_kpa: float, temp_c: float,
 
 
 def build_tx_bits(row: str) -> str:
-    """Return the 248 chip long bit string actually shifted into the CC1101 FIFO."""
+    """Return the chip bit string actually shifted into the CC1101 FIFO.
+
+    240 chips: 1 lead chip + 119 two-chip cells + 1 pad chip = 30 bytes.
+    """
     assert len(row) == FRAME_BITS
     bits = "1"                                  # lead chip (carrier on)
     for b in row[1:]:                           # row[0] is synthesised by the receiver

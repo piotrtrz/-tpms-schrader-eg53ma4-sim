@@ -50,14 +50,17 @@ static const uint8_t LEARN_SEQ[WHEEL_COUNT] = {
 /* ------------------------------------------------------------------ */
 /*  Stan w RTC (przetrwuje deep sleep)                                 */
 /* ------------------------------------------------------------------ */
-#define RTC_MAGIC 0x54504D53u  // 'TPMS'
+/* Magic zwiazany z wersja konfiguracji: zmiana CONFIG_VERSION (np. po
+ * zmianie formatu stanu w RTC) zeruje caly stan po wybudzeniu. */
+#define RTC_MAGIC (0x54504D53u ^ (uint32_t)CONFIG_VERSION)  // 'TPMS' ^ version
 
 RTC_DATA_ATTR static uint32_t rtc_magic;
 RTC_DATA_ATTR static uint8_t  rtc_mode = APP_MODE_NORMAL;
-RTC_DATA_ATTR static uint8_t  rtc_seq_idx = 0;      // indeks w LEARN_SEQ
-RTC_DATA_ATTR static uint8_t  rtc_rot_idx = 0;      // rotacja w NORMAL
+RTC_DATA_ATTR static uint8_t  rtc_seq_idx = 0;       // pozycja w LEARN_SEQ (LEARN)
+RTC_DATA_ATTR static uint8_t  rtc_single_wheel = 0;  // kolo w SINGLE (indeks SENSOR)
+RTC_DATA_ATTR static uint8_t  rtc_rot_idx = 0;       // rotacja w NORMAL
 RTC_DATA_ATTR static uint32_t rtc_wake_count = 0;
-RTC_DATA_ATTR static uint32_t rtc_interval_s = 0;   // 0 = auto wg ACC
+RTC_DATA_ATTR static uint32_t rtc_interval_s = 0;    // 0 = auto wg ACC
 RTC_DATA_ATTR static uint32_t rtc_flags = TPMS_FLAGS;
 RTC_DATA_ATTR static uint64_t rtc_last_acc_ms = 0;
 
@@ -70,13 +73,33 @@ static uint32_t single_start = 0;
 static bool     request_sleep = false;
 static bool     low_batt = false;
 static uint32_t supply_mv = 0;
+#if PIN_LF_TRIGGER >= 0
+static bool     lf_prev = false;       // poprzedni stan wejscia LF (zbocze)
+#endif
 
 /* ------------------------------------------------------------------ */
 /*  Pomocnicze                                                         */
 /* ------------------------------------------------------------------ */
+static uint32_t compute_interval(void);
+
+/* Aktywne kolo: SINGLE trzyma bezposredni indeks SENSOR, LEARN - pozycje
+ * w sekwencji nauki LEARN_SEQ (moga sie roznic po zmianie LEARN_ORDER_*). */
 static uint8_t active_wheel(void)
 {
-    return LEARN_SEQ[rtc_seq_idx % WHEEL_COUNT];
+    return (rtc_mode == APP_MODE_SINGLE)
+            ? (uint8_t)(rtc_single_wheel % WHEEL_COUNT)
+            : LEARN_SEQ[rtc_seq_idx % WHEEL_COUNT];
+}
+
+/* Pozycja kola w sekwencji nauki (do trybu LEARN). */
+static uint8_t seq_pos_of(uint8_t wheel)
+{
+    for (uint8_t i = 0; i < WHEEL_COUNT; i++) {
+        if (LEARN_SEQ[i] == wheel) {
+            return i;
+        }
+    }
+    return 0;
 }
 
 static void refresh_power(void)
@@ -95,13 +118,14 @@ void app_send_burst_wheel(uint8_t wheel)
 {
     uint8_t frame[TPMS_TX_BYTES];
     build_frame_for(wheel, frame);
-    radio_send_burst(frame, TPMS_TX_BYTES, TX_BURST_FRAMES);
-    Serial.printf("TX %s id=%06X %.1f kPa %d C flags=%08X%s\n",
+    bool ok = radio_send_burst(frame, TPMS_TX_BYTES, TX_BURST_FRAMES);
+    Serial.printf("TX %s id=%06X %.1f kPa %d C flags=%08X%s%s\n",
                   SENSOR[wheel % WHEEL_COUNT].name,
                   (unsigned)SENSOR[wheel % WHEEL_COUNT].id,
                   SENSOR[wheel % WHEEL_COUNT].press_kpa10 / 10.0f,
                   (int)SENSOR[wheel % WHEEL_COUNT].temp_c,
-                  (unsigned)rtc_flags, low_batt ? " LOWBATT" : "");
+                  (unsigned)rtc_flags, low_batt ? " LOWBATT" : "",
+                  ok ? "" : " TX-ERR");
 }
 
 void app_send_burst_all(void)
@@ -149,7 +173,7 @@ void app_print_info(void)
                   (unsigned)rtc_flags,
                   TPMS_MODULATION == MODE_FSK ? "FSK" : "OOK",
                   TPMS_CHIP_US, TX_BURST_FRAMES,
-                  (unsigned)(rtc_interval_s ? rtc_interval_s : TX_INTERVAL_S),
+                  (unsigned)compute_interval(),
                   (unsigned long)rtc_wake_count);
     Serial.printf("Vcc=%u mV%s\n", (unsigned)supply_mv, low_batt ? " LOWBATT" : "");
 }
@@ -195,10 +219,14 @@ uint8_t app_wheel(void)
 
 void app_next_wheel(void)
 {
-    rtc_seq_idx = (uint8_t)((rtc_seq_idx + 1) % WHEEL_COUNT);
-    ui_blink_count((uint8_t)(rtc_seq_idx + 1));
-    Serial.printf("Kolo: %s (learn: %d/%d)\n", SENSOR[active_wheel()].name,
-                  (int)rtc_seq_idx + 1, WHEEL_COUNT);
+    if (rtc_mode == APP_MODE_SINGLE) {
+        rtc_single_wheel = (uint8_t)((rtc_single_wheel + 1) % WHEEL_COUNT);
+    }
+    else {
+        rtc_seq_idx = (uint8_t)((rtc_seq_idx + 1) % WHEEL_COUNT);
+    }
+    ui_blink_count((uint8_t)(active_wheel() + 1));
+    Serial.printf("Kolo: %s\n", SENSOR[active_wheel()].name);
     learn_window_start = millis();
 }
 
@@ -207,21 +235,21 @@ void app_set_mode(uint8_t mode, uint8_t wheel)
     rtc_mode = mode;
     switch (mode) {
     case APP_MODE_LEARN:
-        rtc_seq_idx = (uint8_t)(wheel % WHEEL_COUNT);
+        rtc_seq_idx = seq_pos_of((uint8_t)(wheel % WHEEL_COUNT));
         learn_window_start = millis();
         learn_session_start = millis();
         next_tx_ms = 0;
         ui_set_pattern(UI_PAT_LEARN);
-        ui_blink_count((uint8_t)(rtc_seq_idx + 1));
+        ui_blink_count((uint8_t)(active_wheel() + 1));
         Serial.printf("LEARN start, kolo %s\n", SENSOR[active_wheel()].name);
         app_stay_awake(LEARN_TOTAL_TIMEOUT_MS);
         break;
     case APP_MODE_SINGLE:
-        rtc_seq_idx = (uint8_t)(wheel % WHEEL_COUNT);
+        rtc_single_wheel = (uint8_t)(wheel % WHEEL_COUNT);
         single_start = millis();
         next_tx_ms = 0;
         ui_set_pattern(UI_PAT_SINGLE);
-        ui_blink_count((uint8_t)(rtc_seq_idx + 1));
+        ui_blink_count((uint8_t)(active_wheel() + 1));
         Serial.printf("SINGLE start, kolo %s\n", SENSOR[active_wheel()].name);
         app_stay_awake(SINGLE_TIMEOUT_MS ? SINGLE_TIMEOUT_MS : 3600000u);
         break;
@@ -243,17 +271,21 @@ static uint32_t compute_interval(void)
     if (rtc_interval_s != 0) {
         return rtc_interval_s;
     }
-    uint64_t now_ms = power_elapsed_ms() + millis();
-#if PIN_ACC >= 0
+#if PIN_ACC < 0
+    /* Bez wejscia ACC stale pracujemy z interwalem podstawowym - logika
+     * "5 min po zaniku ACC" nie ma wtedy zastosowania. */
+    return (uint32_t)TX_INTERVAL_S;
+#else
+    uint64_t now_ms = power_elapsed_ms();
     if (digitalRead(PIN_ACC) == HIGH) {
         rtc_last_acc_ms = now_ms;
         return (uint32_t)TX_INTERVAL_IGNITION_S;
     }
-#endif
     if (now_ms - rtc_last_acc_ms > (uint64_t)ACC_GRACE_MS) {
         return PARKING_SHUTDOWN ? 0u : (uint32_t)TX_INTERVAL_PARKING_S;
     }
     return (uint32_t)TX_INTERVAL_S;
+#endif
 }
 
 static void tx_cycle(void)
@@ -262,11 +294,35 @@ static void tx_cycle(void)
     app_send_burst_all();
 }
 
+/* Czy ktorekolwiek zrodlo budzenia poziomowego jest aktywne? */
+static bool wake_sources_active(void)
+{
+    if (ui_button_down() || digitalRead(PIN_BUTTON) == BTN_ACTIVE_LEVEL) {
+        return true;
+    }
+#if PIN_LF_TRIGGER >= 0
+    if (digitalRead(PIN_LF_TRIGGER) == HIGH) {
+        return true;
+    }
+#endif
+    return false;
+}
+
 static void go_sleep(uint32_t seconds)
 {
+    /* Nie spij, dopoki przycisk jest wcisniety lub LF aktywne - EXT0/EXT1
+     * dzialaja poziomowo, wiec sen przy aktywnym zrodle = natychmiastowa
+     * petla wybudzen. Dajemy krotki margines i wracamy do petli. */
+    if (wake_sources_active()) {
+        app_stay_awake(500);
+        return;
+    }
+
+    ui_set_pattern(UI_PAT_OFF);
+    digitalWrite(PIN_LED, LOW);
+
     Serial.printf("sleep %us\n", (unsigned)seconds);
     Serial.flush();
-    power_elapsed_add_ms(millis() + (uint64_t)seconds * 1000u);
     power_deep_sleep(seconds);   // nie wraca
 }
 
@@ -282,13 +338,16 @@ void setup(void)
     pinMode(PIN_LF_TRIGGER, INPUT_PULLDOWN);
 #endif
 #if PIN_ACC >= 0
-    pinMode(PIN_ACC, INPUT_PULLDOWN);
+    /* INPUT (bez podciagania): dolna galazka dzielnika wymusza stan niski,
+     * a wewnetrzny pulldown (~45 k) obciazylby dzielnik i zbil prog VIH. */
+    pinMode(PIN_ACC, INPUT);
 #endif
 
     if (rtc_magic != RTC_MAGIC) {
         rtc_magic = RTC_MAGIC;
         rtc_mode = APP_MODE_NORMAL;
         rtc_seq_idx = 0;
+        rtc_single_wheel = 0;
         rtc_rot_idx = 0;
         rtc_wake_count = 0;
         rtc_interval_s = 0;
@@ -364,6 +423,18 @@ void setup(void)
         ui_set_pattern(low_batt ? UI_PAT_LOWBAT : UI_PAT_NORMAL);
     }
 
+    /* Po wybudzeniu przyciskiem/LF obsluzylismy juz akcje - nie powtarzaj
+     * cyklu natychmiast, tylko odloz go o pelny okres. */
+    if (cause == ESP_SLEEP_WAKEUP_EXT0 || cause == ESP_SLEEP_WAKEUP_EXT1) {
+        if (rtc_mode != APP_MODE_NORMAL) {
+            next_tx_ms = millis() + LEARN_TX_PERIOD_MS;
+        }
+    }
+#if PIN_LF_TRIGGER >= 0
+    /* LF ciagle aktywne = brak nowego zbocza = brak kolejnego bursta */
+    lf_prev = (digitalRead(PIN_LF_TRIGGER) == HIGH);
+#endif
+
     Serial.printf("Vcc=%u mV  tryb=%d  interwal=%us\n", (unsigned)supply_mv,
                   (int)rtc_mode, (unsigned)iv);
     app_print_info();
@@ -400,7 +471,7 @@ void loop(void)
             app_set_mode(APP_MODE_NORMAL, 0);
         }
         else {
-            app_set_mode(APP_MODE_SINGLE, rtc_seq_idx);
+            app_set_mode(APP_MODE_SINGLE, active_wheel());
         }
     }
 
@@ -409,11 +480,15 @@ void loop(void)
 #if PIN_LF_TRIGGER >= 0
     /* aktywacja LF tez dziala "na zywo" (nie tylko przez budzenie) */
     {
-        static bool lf_prev = false;
         bool lf = (digitalRead(PIN_LF_TRIGGER) == HIGH);
         if (lf && !lf_prev) {
             refresh_power();
             app_send_burst_wheel(active_wheel());
+            /* po recznej transmisji odloz cykl - bez tego LF moglby
+             * wywolac 2-3 bursty zamiast jednego */
+            if (rtc_mode != APP_MODE_NORMAL) {
+                next_tx_ms = millis() + LEARN_TX_PERIOD_MS;
+            }
         }
         lf_prev = lf;
     }
