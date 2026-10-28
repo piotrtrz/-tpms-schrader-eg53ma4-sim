@@ -1,7 +1,7 @@
 name: check
 on:
   push:
-    branches: [main, feat/release-v2]
+    branches: [main]
   pull_request:
 
 jobs:
