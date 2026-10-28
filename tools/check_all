@@ -26,7 +26,7 @@ run() {
 
 run python-self-test python3 tools/tpms_frame.py --self-test
 run native-tests "$PIO_BIN" test -e native
-run esp32-build "$PIO_BIN" run -e esp32c3supermini
+run esp32-build "$PIO_BIN" run -e esp32s2mini
 run cppcheck "$PIO_BIN" check -e native \
     --flags='--enable=warning,performance,portability --inline-suppr' \
     --fail-on-defect=low

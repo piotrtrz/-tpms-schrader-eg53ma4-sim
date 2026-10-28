@@ -2,7 +2,10 @@
 #include <Arduino.h>
 #include <esp_sleep.h>
 #include <driver/gpio.h>
+#include <soc/soc_caps.h>
+#if SOC_BT_SUPPORTED
 #include <esp32-hal-bt.h>
+#endif
 
 #include "config.h"
 #include "power.h"
@@ -14,7 +17,10 @@ void power_init(void)
     gpio_hold_dis((gpio_num_t)PIN_CC1101_CS);
     gpio_hold_dis((gpio_num_t)PIN_CC1101_SCK);
     gpio_hold_dis((gpio_num_t)PIN_CC1101_MOSI);
+#if SOC_BT_SUPPORTED
+    /* ESP32-S2 nie ma radia Bluetooth; btStop istnieje tylko na chipach z BT. */
     btStop();
+#endif
 #if PIN_VBAT_ADC >= 0
     analogSetPinAttenuation(PIN_VBAT_ADC, ADC_11db);
 #endif
@@ -58,8 +64,9 @@ void power_deep_sleep(uint32_t seconds)
     esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
 
 #if PIN_BUTTON >= 0 || PIN_LF_TRIGGER >= 0
-    /* ESP32-C3 uzywa GPIO wakeup zamiast EXT0/EXT1. Oba wejscia sa
-     * aktywne nisko, wiec moga wspoldzielic jeden tryb GPIO_LOW. */
+    /* Budzenie z pinow RTC (na ESP32-S2: GPIO0-21). Oba wejscia sa aktywne
+     * nisko, wiec moga wspoldzielic jeden tryb. ESP32-S2 nie obsluguje
+     * GPIO wakeup w deep sleep - uzywa EXT1 ANY_LOW. */
     uint64_t wake_mask = 0;
 #if PIN_BUTTON >= 0
     wake_mask |= 1ULL << PIN_BUTTON;
@@ -67,7 +74,11 @@ void power_deep_sleep(uint32_t seconds)
 #if PIN_LF_TRIGGER >= 0
     wake_mask |= 1ULL << PIN_LF_TRIGGER;
 #endif
+#if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
     esp_deep_sleep_enable_gpio_wakeup(wake_mask, ESP_GPIO_WAKEUP_GPIO_LOW);
+#else
+    esp_sleep_enable_ext1_wakeup(wake_mask, ESP_EXT1_WAKEUP_ANY_LOW);
+#endif
 #endif
     esp_deep_sleep_start();
 }

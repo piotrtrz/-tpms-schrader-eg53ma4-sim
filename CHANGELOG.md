@@ -2,12 +2,21 @@
 
 ## Zmiany robocze po 2.0.0-rc.1
 
-- Sprzęt docelowy zmieniono na ESP32-C3 SuperMini; zaktualizowano target
-  PlatformIO, natywne USB CDC, pinout SPI/przycisku/ADC i polaryzację wbudowanej LED.
-- Dodano zasilanie zewnętrzne przez LF33CV, jego właściwy pinout OUT–GND–IN,
-  kondensatory oraz wymagania ochrony i termiki dla zasilania z ACC.
-- Obrazy release dla ESP32-C3 używają `esptool --chip esp32c3` i bootloadera od
-  adresu `0x0`; stare obrazy dla ESP32-WROOM nie są kompatybilne.
+- Sprzęt docelowy zmieniono na ESP32-S2-MINI (ESP32-S2FN4R2, np.
+  ARD-ESP32-S2-MINI, płytka `lolin_s2_mini`); zaktualizowano target PlatformIO,
+  natywne USB CDC, pinout SPI/przycisku/ADC i polaryzację wbudowanej LED
+  (GPIO15, aktywna HIGH). ADC zasilania na GPIO1, opcjonalny LF na GPIO14.
+  `btStop()` kompilowane tylko na chipach z Bluetooth — ESP32-S2 go nie ma.
+- Moduł radiowy CC1101 433 MHz SPI ze złączem SMA i anteną (ARD-CC1101-ANT).
+- Zasilanie zewnętrzne przez regulowany LM317T (TO-220 metal, 1,25–37 V,
+  1,5 A): właściwy pinout ADJ–VOUT–IN, TAB = VOUT, dzielnik 240/390 Ω
+  dający ok. 3,28 V, kondensatory oraz wymagania ochrony i termiki.
+- Docelowe zasilanie z gniazda zapalniczki samochodowej: ładowarka USB
+  (wariant A) albo LM317T (wariant B). Przy gnieździe zasilanym „po stacyjce”
+  emulator nie pobiera prądu na postoju; brak transmisji parkingowej jest
+  akceptowalny, bo ECU auta nie odczytuje TPMS przy wyłączonym zapłonie.
+- Obrazy release dla ESP32-S2 używają `esptool --chip esp32s2` i bootloadera od
+  adresu `0x1000`; stare obrazy dla ESP32-C3 i ESP32-WROOM nie są kompatybilne.
 
 ## 2.0.0-rc.1 — 2026-10-27
 

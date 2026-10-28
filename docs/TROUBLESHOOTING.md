@@ -18,8 +18,8 @@ ID ani interwałów. Podstawowy firmware nie ma trybu FSK.
 | LEARN wróciło do NORMAL | 60 s na kole / 15 min sesji | czas od wejścia, komunikat i LED | uruchom `mode learn 1` i powtórz świadomie od FL |
 | Po RL nie ma następnego koła | sekwencja została zakończona | NORMAL w `info` | zakończ procedurę auta i sprawdź DTC |
 | Kontrolka nie gaśnie mimo RTL-SDR OK | ECU nie zna ID, inny profil/flags/procedura | odczyt ID i DTC z diagnostyki, nie tylko SDR | Clone IDs albo LEARN; potwierdź profil auta; nie zgaduj flags |
-| Pobór snu duży | SuperMini, LF33CV, LED, dzielniki | pomiar całej płytki i regulatora wg `POWER.md` | popraw zasilanie; nie zmieniaj protokołu |
-| Po postoju brak TX | zasilanie tylko z ACC, brownout, błąd NVS/CC1101 | czy po ACC OFF zostaje 3,3 V; log po restarcie, `batt`, `info` | przy zasilaniu tylko z ACC brak TX jest oczekiwany; w innym układzie popraw zasilanie |
+| Pobór snu duży | S2 Mini, LM317T, LED, dzielniki | pomiar całej płytki i regulatora wg `POWER.md` | popraw zasilanie; nie zmieniaj protokołu |
+| Po postoju brak TX | zasilanie tylko z gniazda zapalniczki/ACC, brownout, błąd NVS/CC1101 | czy po wyłączeniu zapłonu zostaje 3,3 V; log po restarcie, `batt`, `info` | przy zasilaniu tylko z gniazda „po stacyjce” brak TX jest oczekiwany; w innym układzie popraw zasilanie |
 | ACC nie zmienia interwału | funkcja domyślnie wyłączona lub zły próg | `PIN_ACC`, napięcie na GPIO OFF/ON | zmontuj zabezpieczone wejście; nigdy 12 V na GPIO |
 
 ## Gdy brak odbioru w samochodzie

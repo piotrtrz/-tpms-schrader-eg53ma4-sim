@@ -1,4 +1,4 @@
-# Symulator TPMS Schrader EG53MA4 — ESP32-C3 SuperMini + CC1101
+# Symulator TPMS Schrader EG53MA4 — ESP32-S2-MINI + CC1101
 
 **Wersja 2.0.0-rc.1 — release candidate bez walidacji sprzętowej.**
 
@@ -28,28 +28,33 @@ ogłoszenie sprzedażowe same w sobie nie potwierdzają profilu radiowego.
 
 ```text
  Prototyp na biurku:
- USB-C ──> [ESP32-C3 SuperMini] ── SPI ──> [CC1101 433 MHz] ──> antena
-                  │      │                     │
-                  │      └── GPIO3: przycisk   └── wspólna GND, tylko 3,3 V
-                  └── GPIO8: wbudowana LED (aktywna LOW)
+ USB-C ──> [ESP32-S2-MINI] ── SPI ──> [CC1101 433 MHz] ──> antena SMA
+                 │      │                     │
+                 │      └── GPIO3: przycisk   └── wspólna GND, tylko 3,3 V
+                 └── GPIO15: wbudowana LED (aktywna HIGH)
 
- Zasilanie zewnętrzne 3,3 V:
- zabezpieczone VIN ──> [LF33CV] ──> 3V3 SuperMini + VCC CC1101
+ Zasilanie docelowe z gniazda zapalniczki samochodowej:
+ wariant A: gniazdo ──> [ładowarka samochodowa USB] ──> USB-C płytki
+ wariant B: gniazdo ──> bezpiecznik/TVS ──> [LM317T 3,3 V] ──> 3V3 + VCC CC1101
 
  Konfiguracja: USB CDC 115200 → NVS → 4 × {ID, ciśnienie, temperatura}
 ```
 
-Wyjście LF33CV podłącz do **3V3, nie do 5V**. Nie podłączaj 12 V do GPIO, 3V3
-ani 5V. Przy zasilaniu zewnętrznym 3,3 V odłącz USB, chyba że separacja źródeł
-została sprawdzona w dokumentacji konkretnego egzemplarza płytki. Pełny pinout,
-kondensatory i zasady podłączenia „po stacyjce”: [HARDWARE](docs/HARDWARE.md).
+Wyjście LM317T ustaw dzielnikiem na **3,3 V i podłącz do 3V3, nie do 5V**. Nie
+podłączaj 12 V do GPIO, 3V3 ani 5V. Przy zasilaniu zewnętrznym 3,3 V odłącz
+USB, chyba że separacja źródeł została sprawdzona w dokumentacji konkretnego
+egzemplarza płytki. Gniazdo zapalniczki w większości aut jest zasilane tylko
+po przekręceniu stacyjki — **sprawdź to w swoim aucie**. Wtedy emulator nie
+pobiera prądu na postoju; komputer samochodowy i tak nie odczytuje stanu TPMS
+przy wyłączonym zapłonie, więc brak nadawania parkingowego nie ma znaczenia.
+Pełny pinout, dzielnik LM317T i kondensatory: [HARDWARE](docs/HARDWARE.md).
 
 ## Quick Start
 
 ### 1. Złóż prototyp
 
 Kup elementy z [BOM](docs/HARDWARE.md#bom-prototypu-laboratoryjnego). Podłącz
-CC1101 i przycisk zgodnie z tabelą pinów; LED jest już na płytce SuperMini.
+CC1101 i przycisk zgodnie z tabelą pinów; LED jest już na płytce S2 Mini.
 Na biurku zasil układ przez sprawdzony kabel USB-C z danymi. Nie montuj jeszcze
 niczego w samochodzie.
 
@@ -77,8 +82,8 @@ To nie jest test fizycznego radia.
 ### 3. Skompiluj i wgraj
 
 ```bash
-.venv/bin/pio run -e esp32c3supermini
-.venv/bin/pio run -e esp32c3supermini -t upload
+.venv/bin/pio run -e esp32s2mini
+.venv/bin/pio run -e esp32s2mini -t upload
 .venv/bin/pio device monitor --baud 115200
 ```
 
@@ -159,7 +164,7 @@ się po 5 min.
 - Protokół i niewiadome: [PROTOCOL](docs/PROTOCOL.md)
 - Dokładne wyniki i checklista HIL: [VALIDATION](docs/VALIDATION.md)
 - Pobór (na razie szacunki): [POWER](docs/POWER.md)
-- LF33CV i zasilanie „po stacyjce”: [HARDWARE](docs/HARDWARE.md#wariant-prąd-po-stacyjce--wymagania-niezwalidowany-projekt)
+- LM317T i zasilanie z gniazda zapalniczki: [HARDWARE](docs/HARDWARE.md#wariant-z-gniazda-zapalniczki--wymagania-niezwalidowany-projekt)
 - Zmiany: [CHANGELOG](CHANGELOG.md)
 
 Gotowe obrazy tworzy `bash tools/package_release.sh`. Pliki i adresy opisano w

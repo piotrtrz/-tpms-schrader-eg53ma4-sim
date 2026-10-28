@@ -3,10 +3,12 @@
 ## Status pomiarów
 
 **Nie wykonano pomiarów prądu fizycznego prototypu.** Liczby poniżej są
-szacunkami budżetu, nie wynikiem walidacji. SuperMini nie nadaje się do deklaracji
+szacunkami budżetu, nie wynikiem walidacji. S2 Mini nie nadaje się do deklaracji
 poboru µA bez pomiaru: wbudowany regulator, LED i obwody pomocnicze zwiększają
-pobór. Sam LF33CV ma w stanie ON typowo ok. 0,5 mA prądu własnego (maks. 1 mA
-przy braku obciążenia), więc zasilanie stałe wymaga osobnego bilansu energetycznego.
+pobór. Sam LM317T obciąża zasilanie prądem dzielnika ok. 5 mA (R1 = 240 Ω)
+plus prąd własny, więc zasilanie stałe wymaga osobnego bilansu energetycznego.
+Docelowe zasilanie z gniazda zapalniczki „po stacyjce” zdejmuje ten problem:
+przy wyłączonym zapłonie emulator nie pobiera prądu wcale.
 
 ## Harmonogram firmware
 
@@ -20,7 +22,8 @@ przy braku obciążenia), więc zasilanie stałe wymaga osobnego bilansu energet
   pozostać uśpione do czasu wyłącznie ręcznego wybudzenia.
 - ACC (opcjonalny sprzętowo) wybiera interwał ignition/parking. Nie jest potrzebne
   jako jedyne źródło wybudzenia, ponieważ RTC zawsze działa. Jeżeli cały układ
-  zasilany jest tylko z ACC, po ACC OFF nie ma zasilania, RTC ani transmisji.
+  zasilany jest tylko z gniazda zapalniczki „po stacyjce” lub z ACC, po ACC OFF
+  nie ma zasilania, RTC ani transmisji — i jest to docelowy scenariusz.
 
 ## Szacunek ładunku dla ustawień domyślnych
 
@@ -37,10 +40,11 @@ obietnica poboru z akumulatora 12 V.
 
 ## Metoda pomiaru wymagana przed „validated”
 
-1. **Cały SuperMini w sleep:** miernik µA szeregowo na wejściu, nie przez USB.
+1. **Cały S2 Mini w sleep:** miernik µA szeregowo na wejściu, nie przez USB.
    Odczekać do końca TX i zanotować minimum/stan stabilny oraz model płytki.
-2. **SuperMini + LF33CV:** powtórzyć pomiar na zabezpieczonym wejściu VIN i na
-   szynie 3,3 V. Uwzględnić Iq regulatora, TVS, dzielniki i pull-upy.
+2. **S2 Mini + LM317T:** powtórzyć pomiar na zabezpieczonym wejściu VIN i na
+   szynie 3,3 V. Uwzględnić prąd dzielnika regulatora, TVS, pozostałe dzielniki
+   i pull-upy.
 3. **Cykl NORMAL:** bocznik + oscyloskop albo logger z odpowiednim pasmem.
    Zarejestrować boot, 12 ramek, przerwy, wejście w sen przez co najmniej 10 cykli.
 4. **Średnia:** całkować ładunek co najmniej 15 min przy 30 s i 120 s. Podawać
@@ -52,9 +56,10 @@ obietnica poboru z akumulatora 12 V.
 ## Wnioski dopuszczalne przed pomiarem
 
 - Największy wpływ mają interwał, czas czuwania, PA i Iq całej płytki.
-- Do wersji energooszczędnej trzeba zmierzyć cały SuperMini i LF33CV; przy
-  zasilaniu wyłącznie z ACC układ nie pobiera prądu po wyłączeniu zapłonu, ale
-  wtedy również nie nadaje w trybie parkingowym.
+- Do wersji energooszczędnej trzeba zmierzyć cały S2 Mini i LM317T; przy
+  zasilaniu wyłącznie z gniazda zapalniczki „po stacyjce” układ nie pobiera
+  prądu po wyłączeniu zapłonu, ale wtedy również nie nadaje w trybie
+  parkingowym — co jest zgodne z założeniem, bo ECU auta wtedy nie nasłuchuje.
 - Nie rekomendujemy 18650 w kabinie ani wieloletniej pracy bateryjnej z ESP32.
 - Stały pobór emulatora trzeba uwzględnić przy długim postoju pojazdu; nie podajemy
   czasu „bezpiecznego dla akumulatora” bez pomiaru całego samochodu.

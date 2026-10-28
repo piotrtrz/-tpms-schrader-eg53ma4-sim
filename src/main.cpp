@@ -1,6 +1,7 @@
 /* Symulator diagnostyczny TPMS. Sztuczne cisnienie moze ukryc usterke opony. */
 #include <Arduino.h>
 #include <esp_sleep.h>
+#include <soc/soc_caps.h>
 
 #include "app.h"
 #include "config.h"
@@ -208,11 +209,24 @@ void setup(void)
     }
 
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-    bool transmit = cause != ESP_SLEEP_WAKEUP_GPIO;
+#if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
+    /* Chipy z GPIO wakeup w deep sleep (np. ESP32-C3). */
+    bool pin_wake = cause == ESP_SLEEP_WAKEUP_GPIO;
+#else
+    /* ESP32-S2: budzenie z pinow RTC zglasza EXT1. */
+    bool pin_wake = cause == ESP_SLEEP_WAKEUP_EXT1;
+#endif
+    bool transmit = !pin_wake;
     g_app->begin(millis(), transmit);
 #if PIN_LF_TRIGGER >= 0
-    uint64_t wake_mask = cause == ESP_SLEEP_WAKEUP_GPIO
-            ? esp_sleep_get_gpio_wakeup_status() : 0;
+    uint64_t wake_mask = 0;
+    if (pin_wake) {
+#if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
+        wake_mask = esp_sleep_get_gpio_wakeup_status();
+#else
+        wake_mask = esp_sleep_get_ext1_wakeup_status();
+#endif
+    }
     if ((wake_mask & (1ULL << PIN_LF_TRIGGER)) != 0) {
         g_app->send_current();
     }
