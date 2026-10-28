@@ -21,7 +21,7 @@ jedynie istnienie takiej klasy urządzenia, nie zgodność tego projektu.
 Dekoder wymaga dokładnie 120 bitów: 40 bitów synchronizacji i 80 bitów danych.
 
 ```text
-0                  40                              64        72  80  88
+0                   40          72       96      104     112       120
 | 40 × sync (0)     | flags 4 B | ID 3 B | P 1 B | T 1 B | sum 1 B |
                    4C 90 00 70  2F C8 71    68      49      65
 ```

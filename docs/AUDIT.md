@@ -16,6 +16,13 @@
 | P2 | Brak pełnego jednego check/build artefaktów | check_all, CI, Docker, package_release | dodane; wyniki VALIDATION |
 | P2 | Okno konsoli po każdym RTC zwiększa pobór | sen od razu po cyklu RTC | poprawione; pomiar HIL otwarty |
 | P2 | README niezgodne z zachowaniem | nowy Quick Start, jedna tabela UI | przepisane |
+| P1 | Pull-up cyfrowy przycisku/LF nie działa w deep sleep (EXT1, RTC_PERIPH off) | pociągnięcia RTC + HOLD przed snem | naprawione w power.cpp; HIL budzenia otwarte |
+| P1 | `nan` przechodził walidację konsoli (cisnienie/RF) i trafiał do NVS | odrzucanie NaN/inf + testy native | naprawione; `parse` + test_parse |
+| P2 | Dzielnik ADC nasycany powyżej ~11,8 V — brak odczytu 12–14,4 V | zakres do ~16 V | naprawione config.h (R2 180 kΩ); wymaga pomiaru |
+| P2 | Pełny obraz release z `40m` vs nagłówek builda `80m` | zgodność parametrów flash | naprawione package_release.sh; weryfikacja headera |
+| P2 | Model Pythona bez saturacji temperatury (roznica z C++) | clamp 0–255 + self-test | naprawione tpms_frame.py |
+| P3 | Ujemny test checksum ćwiczył Manchester zamiast sumy | odwrócenie całej komórki | naprawione test_tpms_frame |
+| P3 | Błędne offsety bitów w diagramie PROTOCOL.md | poprawne 72/96/104/112/120 | naprawione |
 
 ## Otwarte, wymagające sprzętu
 

@@ -38,6 +38,9 @@ def build_row(sensor_id: int, pressure_kpa: float, temp_c: float,
         raise ValueError("temperatura musi byc w zakresie -40..85 C")
     num = 9 * tc + 160
     temp_f = (num + 2) // 5 if num >= 0 else -((-num + 2) // 5)
+    # Saturacja zgodna z tpms_frame.cpp: bez niej temperatura <= -19 C daje
+    # ujemny bajt i psuje ramke (roznica miedzy modelem Pythona a firmware).
+    temp_f = max(0, min(255, temp_f))
     payload = [flags >> 24, (flags >> 16) & 255, (flags >> 8) & 255,
                flags & 255, sensor_id >> 16, (sensor_id >> 8) & 255,
                sensor_id & 255, press_byte, temp_f]
@@ -76,6 +79,12 @@ def self_test() -> int:
     if got != expected:
         print(f"FAIL: nagranie gfile001: {got} != {expected}")
         return 1
+    # Regresja: saturacja temperatury zgodna z firmware (zakres -40..85 C).
+    for tc, want in ((-40, 0), (-19, 0), (-18, 0), (23, 73), (85, 185)):
+        byte = decode_row(build_row(0x2FC871, 0, tc))["bytes"][8]
+        if byte != want:
+            print(f"FAIL: temperatura {tc} C: {byte} != {want}")
+            return 1
     import random
     rng = random.Random(42)
     for _ in range(500):

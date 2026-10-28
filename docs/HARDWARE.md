@@ -40,9 +40,9 @@ sprawdź konkretny klon, bo nazwy handlowe bywają używane dla różnych płyte
 | GPIO6 | MOSI/SI | SPI |
 | GPIO7 | CS/CSn/SS | SPI |
 | GPIO10 | GDO0 | diagnostyka biblioteki; GDO2 niepodłączony |
-| GPIO3 | przycisk NO do GND | wewnętrzny pull-up; RTC GPIO wakeup, opcjonalny zewnętrzny 10 kΩ |
+| GPIO3 | przycisk NO do GND | pull-up RTC włączany przez firmware przed deep sleep (pull-up cyfrowy nie działa w deep sleep); RTC GPIO wakeup, zalecany zewnętrzny 10 kΩ |
 | GPIO15 | wbudowana LED | aktywna HIGH, firmware steruje właściwą polaryzacją |
-| GPIO1 | opcjonalny ADC zasilania przez dzielnik | `PIN_VBAT_ADC`, ADC1_CH0; nigdy 12 V wprost |
+| GPIO1 | opcjonalny ADC zasilania przez dzielnik | `PIN_VBAT_ADC`, ADC1_CH0; dzielnik 1 MΩ/180 kΩ (`config.h`), zakres do ok. 16 V; nigdy 12 V wprost |
 | GPIO2 | opcjonalne ACC po zmianie `PIN_ACC` i zabezpieczeniu | nigdy 12 V wprost |
 | GPIO14 | opcjonalny detektor LF po zmianie `PIN_LF_TRIGGER` | aktywny LOW; RTC GPIO wakeup, domyślnie wyłączone |
 | GPIO0 | przycisk BOOT płytki | pin strapping; nie używać do CC1101 ani przycisku sterującego |

@@ -34,9 +34,9 @@ Przed pełnym flashem zapisz ID — partycja NVS może zostać skasowana. Konfig
 sprawdź po restarcie przez `info`. Migracji z wersji 1.0 bez NVS nie ma; należy
 wpisać ID w konsoli jeden raz.
 
-## Wyniki testów bez sprzętu (2026-10-27)
+## Wyniki testów bez sprzętu (2026-10-28)
 
-- native: 20/20 PASS;
+- native: 24/24 PASS (po audycie integracji sprzęt–firmware);
 - pełny ESP32 build z `-Werror`: PASS;
 - cppcheck: PASS, 0 defektów;
 - rtl_433: 64/64 rekordy referencyjne, 3/3 syntetyczne, 3/3 negatywne: PASS.

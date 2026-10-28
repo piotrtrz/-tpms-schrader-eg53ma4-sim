@@ -27,7 +27,7 @@ rtl_433_tests commit `1aa8c29…`. Pełne SHA znajdują się w `PROTOCOL.md`.
 
 | Komenda | Wynik |
 |---|---|
-| `pio test -e native` | **20/20 PASS** — ramka, cztery niezależne wektory, negatywne, NVS, fake clock/radio, Clone IDs, LEARN, SINGLE, ACC, restart |
+| `pio test -e native` | **24/24 PASS** — ramka, cztery niezależne wektory, negatywne, NVS, parsowanie konsoli (NaN/zakresy), fake clock/radio, Clone IDs, LEARN, SINGLE, ACC, restart |
 | `pio run -e esp32s2mini` | **PASS**, własne ostrzeżenia traktowane jako błędy (`-Werror`) |
 | `pio check -e native ... --fail-on-defect=low` | **PASS**, 0 defektów po poprawce inicjalizacji struktur |
 | `python3 tools/tpms_frame.py --self-test` | **PASS**, nagranie + 500 ramek |

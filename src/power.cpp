@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <esp_sleep.h>
 #include <driver/gpio.h>
+#include <driver/rtc_io.h>
 #include <soc/soc_caps.h>
 #if SOC_BT_SUPPORTED
 #include <esp32-hal-bt.h>
@@ -74,6 +75,32 @@ void power_deep_sleep(uint32_t seconds)
 #if PIN_LF_TRIGGER >= 0
     wake_mask |= 1ULL << PIN_LF_TRIGGER;
 #endif
+#if SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
+    /* Cyfrowe pull-up/pull-down (pinMode) nie dzialaja w deep sleep, gdy
+     * domena RTC_PERIPH jest wylaczona. Bez pociagniec RTC piny budzenia
+     * plywaja i EXT1 moze budzic losowo; konfigurujemy je tu i utrzymujemy
+     * mechanizmem HOLD (wg ESP-IDF sleep_modes dla EXT1). */
+#if PIN_BUTTON >= 0
+    rtc_gpio_init((gpio_num_t)PIN_BUTTON);
+#if BTN_ACTIVE_LEVEL == 0
+    rtc_gpio_pulldown_dis((gpio_num_t)PIN_BUTTON);
+    rtc_gpio_pullup_en((gpio_num_t)PIN_BUTTON);
+#else
+    rtc_gpio_pullup_dis((gpio_num_t)PIN_BUTTON);
+    rtc_gpio_pulldown_en((gpio_num_t)PIN_BUTTON);
+#endif
+#endif
+#if PIN_LF_TRIGGER >= 0
+    rtc_gpio_init((gpio_num_t)PIN_LF_TRIGGER);
+#if LF_ACTIVE_LEVEL == 0
+    rtc_gpio_pulldown_dis((gpio_num_t)PIN_LF_TRIGGER);
+    rtc_gpio_pullup_en((gpio_num_t)PIN_LF_TRIGGER);
+#else
+    rtc_gpio_pullup_dis((gpio_num_t)PIN_LF_TRIGGER);
+    rtc_gpio_pulldown_en((gpio_num_t)PIN_LF_TRIGGER);
+#endif
+#endif
+#endif /* SOC_RTCIO_INPUT_OUTPUT_SUPPORTED */
 #if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
     esp_deep_sleep_enable_gpio_wakeup(wake_mask, ESP_GPIO_WAKEUP_GPIO_LOW);
 #else

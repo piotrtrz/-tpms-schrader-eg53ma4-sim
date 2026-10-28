@@ -32,8 +32,12 @@
 #ifndef PIN_VBAT_ADC
 #define PIN_VBAT_ADC 1
 #endif
+/* Dzielnik mierzy zasilanie 12 V (prog LOWBATT 11,5 V). R2 = 180 kOhm
+ * daje pelny zakres ADC ok. 16,4 V przy pelnej skali 2,5 V (11 dB):
+ * 14,8 V ladowania daje 2,25 V na pinie, wiec odczyt nie nasyci sie.
+ * Wczesniejsze 270 kOhm nasycale ADC juz przy ok. 11,8 V. */
 #define VBAT_DIVIDER_R1 1000000.0f
-#define VBAT_DIVIDER_R2 270000.0f
+#define VBAT_DIVIDER_R2 180000.0f
 #define VBAT_CAL 1.000f
 #define VBAT_SAMPLES 16
 #define LOWBATT_THRESHOLD_MV 11500

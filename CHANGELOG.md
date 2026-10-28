@@ -2,6 +2,27 @@
 
 ## Zmiany robocze po 2.0.0-rc.1
 
+- Audyt integracji sprzęt–firmware (2026-10-28), spójność ESP32-S2-MINI +
+  CC1101 SMA + LM317T:
+  - Budzenie EXT1: pociągnięcia RTC przycisku i LF konfigurowane przed deep
+    sleep. Pull-up cyfrowy (`pinMode`) nie działa przy wyłączonej domenie
+    RTC_PERIPH (dokumentacja ESP-IDF), więc piny budzenia pływały i EXT1
+    mogło budzić losowo. Zalecany też zewnętrzny 10 kΩ.
+  - Konsola: parsowanie liczb odrzuca NaN i nieskończoność (wcześniej
+    `pressure nan` / `rf freq nan` przechodziły walidację; NaN trafiał do NVS
+    jako ciśnienie, a `rf freq nan` blokował późniejsze zapisy). Logika
+    parsowania wydzielona do przenośnego modułu `parse` z testami native.
+  - Zasilanie: dzielnik ADC R2 270 kΩ → 180 kΩ. Poprzedni dzielnik nasycał
+    ADC (pełna skala 2,5 V) już powyżej ok. 11,8 V i nie mierzył napięcia
+    instalacji 12 V w warunkach pracy 12,6–14,4 V.
+  - `tools/package_release.sh`: pełny obraz `merge_bin` z `--flash-freq 80m`
+    zgodnym z manifestem `lolin_s2_mini`; poprzednie `40m` nadpisywało
+    nagłówek bootloadera (80 MHz) innym parametrem niż build.
+  - `tools/tpms_frame.py`: saturacja temperatury do 0–255 zgodna z firmware
+    (temperatury ≤ −19 °C psuły ramkę w modelu Pythona).
+  - Testy: ujemny przypadek checksum odwraca całą komórkę Manchester
+    (poprzednio ćwiczył naruszenie Manchester zamiast sumy); nowy zestaw
+    `test_parse` (zakresy, NaN/inf); poprawiony diagram bitów w `PROTOCOL.md`.
 - Sprzęt docelowy zmieniono na ESP32-S2-MINI (ESP32-S2FN4R2, np.
   ARD-ESP32-S2-MINI, płytka `lolin_s2_mini`); zaktualizowano target PlatformIO,
   natywne USB CDC, pinout SPI/przycisku/ADC i polaryzację wbudowanej LED

@@ -17,7 +17,7 @@ cp "$BUILD/bootloader.bin" "$BUILD/partitions.bin" "$BUILD/firmware.bin" \
    "$BUILD/firmware.elf" "$OUT/"
 cp "$BOOT_APP0" "$OUT/boot_app0.bin"
 "$ESPTOOL" --chip esp32s2 merge-bin -o "$OUT/firmware-full.bin" \
-    --flash-mode dio --flash-freq 40m --flash-size 4MB \
+    --flash-mode dio --flash-freq 80m --flash-size 4MB \
     0x1000 "$OUT/bootloader.bin" 0x8000 "$OUT/partitions.bin" \
     0xe000 "$OUT/boot_app0.bin" 0x10000 "$OUT/firmware.bin"
 (
@@ -31,6 +31,7 @@ PlatformIO: 6.1.18
 Platforma: espressif32 8.0.0, ESP32-S2-MINI ESP32-S2FN4R2 (lolin_s2_mini)
 CC1101: de6757ef633b3e626dae5c7835cdb66ab53f9a1d
 Adresy: 0x1000 bootloader, 0x8000 partitions, 0xe000 boot_app0, 0x10000 firmware
+Flash: dio, 80 MHz, 4 MB (zgodne z board manifest lolin_s2_mini)
 Pelny obraz firmware-full.bin: flash od 0x0.
 EOF
 cat "$OUT/BUILD-INFO.txt"

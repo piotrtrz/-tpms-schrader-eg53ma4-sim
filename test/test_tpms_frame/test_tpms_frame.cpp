@@ -94,9 +94,10 @@ static void test_manchester_polarity_and_negative_frames(void)
     TEST_ASSERT_FALSE(decode_strict(frame, sizeof(frame) - 1u, payload));
 
     memcpy(damaged, frame, sizeof(frame));
-    /* Zmien ostatnia komorke checksum z zachowaniem poprawnego Manchester. */
-    damaged[28] ^= 0x40u;
-    damaged[28] ^= 0x10u;
+    /* Odwroc cala komorke Manchester (oba chipy) w bicie sumy kontrolnej:
+     * ramka pozostaje poprawnym Manchesterem, ale suma przestaje sie zgadzac,
+     * wiec odrzucenie nastepuje wlasnie na etapie checksum. */
+    damaged[28] ^= 0x60u;
     TEST_ASSERT_FALSE(decode_strict(damaged, sizeof(damaged), payload));
 }
 
