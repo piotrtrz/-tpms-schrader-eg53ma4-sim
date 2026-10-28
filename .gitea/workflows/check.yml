@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-24.04
     container: python:3.12.12-slim-bookworm
     steps:
-      # nodejs jest potrzebne akcjom JS (checkout, upload-artifact) i musi byc
+      # nodejs jest potrzebne akcjom JS (checkout, upload-artifact) i musi być
       # zainstalowane przed pierwszym krokiem "uses".
       - name: Install build dependencies
         run: |
@@ -22,6 +22,12 @@ jobs:
         run: bash ./tools/check_all
       - name: Upload validation reports
         uses: actions/upload-artifact@v4
+        # Klient upload-artifact@v4+ odmawia pracy poza github.com (wykrywa reszte
+        # swiata jako GHES). Wysylka idzie przez ACTIONS_RESULTS_URL, a
+        # GITHUB_SERVER_URL sluzy tylko do tego testu i URL-a wyswietlanego, wiec
+        # host z sufiksem .localhost omija blokade bez wplywu na API.
+        env:
+          GITHUB_SERVER_URL: http://gitea.localhost
         with:
           name: validation-reports
           path: artifacts/validation/
