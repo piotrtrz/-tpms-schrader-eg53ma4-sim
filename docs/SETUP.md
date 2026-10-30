@@ -78,7 +78,7 @@ koła w NVS i po utracie zasilania startuje bezpiecznie w NORMAL.
 
 | Komenda | Zakres / skutek |
 |---|---|
-| `pressure all 260` | 0–637,5 kPa, kwantyzacja 2,5 kPa |
+| `pressure all 260` | 0–637,5 kPa, krok bajtu P ≈ 2,73 kPa (kalibracja wg auta, `PROTOCOL.md`) |
 | `temp all 23` | −40…85 °C; w ramce °F |
 | `interval normal 30` | interwał bez ACC, 5–86400 s |
 | `interval ignition 30` | z aktywnym sprzętowym ACC |

@@ -7,6 +7,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from tpms_frame import press_raw
+
 EXPECTED = {
     "gfile001.cu8": ("2FC871", 90.0),
     "gfile002.cu8": ("2EAAF9", 90.0),
@@ -59,6 +62,9 @@ def main() -> int:
         print(f"{'OK' if valid else 'FAIL'} referencja {filename}: "
               f"{len(records)}/16, id={sensor_id}, flags=4c900070")
 
+    # rtl_433 liczy pole P skala 2,5 kPa/bit (niepotwierdzona); firmware
+    # koryguje ja stala PRESSURE_KPA100_PER_RAW, wiec oczekiwana wartosc
+    # z rtl_433 to surowy bajt P * 2.5, a nie zadane kPa.
     synthetic = [("2FC871", 260, 23, 73.0), ("3495AC", 220, -5, 23.0),
                  ("ABCDEE", 262.5, 24, 75.0)]
     with tempfile.TemporaryDirectory(prefix="tpms-rtl433-") as temp:
@@ -69,15 +75,18 @@ def main() -> int:
                             "--temp", str(temp_c), "-o", str(capture)],
                            check=True, capture_output=True)
             status, records, raw = decode(args.rtl433, capture)
+            expect_kpa = press_raw(pressure) * 2.5
             valid = status == 0 and len(records) >= 1 and all(
                 record.get("id") == sensor_id
-                and record.get("pressure_kPa") == pressure
+                and record.get("pressure_kPa") == expect_kpa
                 and record.get("temperature_F") == temp_f
                 and record.get("flags") == "4c900070"
                 and record.get("mic") == "CHECKSUM" for record in records)
             require(valid, f"syntetyczna {sensor_id}: {raw}", failures)
             print(f"{'OK' if valid else 'FAIL'} syntetyczna id={sensor_id}: "
-                  f"{len(records)} dekodowan, {pressure:.1f} kPa, {temp_f:.1f} F")
+                  f"{len(records)} dekodowan, P={press_raw(pressure)} "
+                  f"(rtl_433: {expect_kpa:.1f} kPa z {pressure:.1f} kPa), "
+                  f"{temp_f:.1f} F")
 
         for corruption in ("checksum", "manchester", "truncate"):
             capture = pathlib.Path(temp) / f"bad-{corruption}.cu8"

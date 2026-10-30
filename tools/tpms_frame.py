@@ -14,6 +14,20 @@ SYNC_BITS = 40
 TX_BYTES = 30
 DEFAULT_FLAGS = 0x4C900070
 
+# Kalibracja pola P (patrz docs/AUDIT.md): tyle setnych kPa przypada na jeden
+# bit bajtu P. Skala rtl_433 (250 = 2,5 kPa/bit) nie jest potwierdzona
+# nagraniami (wszystkie maja P=0), a pomiar z auta: 260 kPa -> 284 kPa na
+# wyswietlaczu przy P=104 => korekta skalujaca 2,73 kPa/bit (P=95 dla 260).
+# Do strojenia po feedbacku z auta - zmienic tez TPMS_PRESSURE_KPA100_PER_RAW.
+PRESSURE_KPA100_PER_RAW = 273
+
+
+def press_raw(pressure_kpa: float) -> int:
+    kpa10 = int(math.floor(pressure_kpa * 10.0 + 0.5))
+    if not 0 <= kpa10 <= 6375:
+        raise ValueError("cisnienie musi byc w zakresie 0..637.5 kPa")
+    return (kpa10 * 10 + PRESSURE_KPA100_PER_RAW // 2) // PRESSURE_KPA100_PER_RAW
+
 
 def valid_id(sensor_id: int) -> bool:
     return 0 < sensor_id < 0xFFFFFF
@@ -32,7 +46,7 @@ def build_row(sensor_id: int, pressure_kpa: float, temp_c: float,
     kpa10 = int(math.floor(pressure_kpa * 10.0 + 0.5))
     if not 0 <= kpa10 <= 6375:
         raise ValueError("cisnienie musi byc w zakresie 0..637.5 kPa")
-    press_byte = (kpa10 + 12) // 25
+    press_byte = press_raw(pressure_kpa)
     tc = int(math.floor(temp_c + 0.5))
     if not -40 <= tc <= 85:
         raise ValueError("temperatura musi byc w zakresie -40..85 C")
@@ -68,6 +82,9 @@ def decode_row(row: str):
             for i in range(10)]
     return {"flags": int.from_bytes(bytes(data[:4]), "big"),
             "id": int.from_bytes(bytes(data[4:7]), "big"),
+            # 2,5 kPa/bit to skala dekodera rtl_433 (niepotwierdzona); firmware
+            # koryguje ja stala PRESSURE_KPA100_PER_RAW, wiec wartosc ponizej
+            # != cisnieniu zadanemu w konsoli.
             "pressure_kPa": data[7] * 2.5, "temperature_F": data[8],
             "checksum_ok": sum(data[:9]) & 255 == data[9], "bytes": data}
 
@@ -84,6 +101,12 @@ def self_test() -> int:
         byte = decode_row(build_row(0x2FC871, 0, tc))["bytes"][8]
         if byte != want:
             print(f"FAIL: temperatura {tc} C: {byte} != {want}")
+            return 1
+    # Regresja kalibracji pola P (punkt pomiarowy z auta: 260 kPa -> P=95).
+    for kpa, want in ((0, 0), (1.2, 0), (1.4, 1), (260.0, 95), (637.5, 234)):
+        byte = press_raw(kpa)
+        if byte != want:
+            print(f"FAIL: cisnienie {kpa} kPa: {byte} != {want}")
             return 1
     import random
     rng = random.Random(42)

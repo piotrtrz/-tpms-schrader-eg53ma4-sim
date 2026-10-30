@@ -15,6 +15,14 @@ extern "C" {
 #define TPMS_TX_BYTES 30
 #define TPMS_TX_CHIPS (TPMS_TX_BYTES * 8)
 
+/* Kalibracja pola P: tyle setnych kPa przypada na jeden bit bajtu P.
+ * Skala rtl_433 (250 = 2,5 kPa/bit) nie jest potwierdzona nagraniami
+ * (wszystkie maja P=0), a pomiar z auta: 260 kPa -> 284 kPa na wyswietlaczu
+ * przy P=104, wiec korekta skalujaca 2,73 kPa/bit daje P=95 dla 260 kPa.
+ * Do strojenia po feedbacku z auta (docs/AUDIT.md) - zmienic tez
+ * PRESSURE_KPA100_PER_RAW w tools/tpms_frame.py. */
+#define TPMS_PRESSURE_KPA100_PER_RAW 273
+
 #ifdef __cplusplus
 static_assert(TPMS_TX_CHIPS == 1 + 2 * (TPMS_ROW_BITS - 1) + 1,
               "Nieprawidlowa dlugosc bufora Manchester");

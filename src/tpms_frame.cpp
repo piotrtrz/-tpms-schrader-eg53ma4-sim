@@ -26,7 +26,8 @@ bool tpms_build_payload(uint8_t out[TPMS_PAYLOAD_LEN], uint32_t id,
         return false;
     }
 
-    int32_t pressure = ((int32_t)press_kpa10 + 12) / 25;
+    int32_t pressure = ((int32_t)press_kpa10 * 10 + TPMS_PRESSURE_KPA100_PER_RAW / 2)
+            / TPMS_PRESSURE_KPA100_PER_RAW;
     if (pressure > 255) {
         pressure = 255;
     }

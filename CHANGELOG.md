@@ -2,6 +2,25 @@
 
 ## Zmiany robocze po 2.0.0-rc.1
 
+- Mikrodrzemki zamiast jednego długiego snu (`config.h`: `NAP_PERIOD_MS`):
+  LED miga co ok. 2 s także między wysyłkami, po każdym budzeniu timera jest
+  widoczne mignięcie (`NAP_AWAKE_MS`). Sen to reszta okresu po czasie
+  boot + okno; TX ramek pozostaje co interwał (licznik snu w pamięci RTC,
+  `interval` wchodzi w życie przy następnym cyklu). `power_deep_sleep`
+  przyjmuje milisekundy. Wcześniej budzenie z timera gasiło LED w tym samym
+  `loop()` — błysk trwał kilka ms i budzenie było niewidoczne.
+- Przycisk: domyślnie przycisk BOOT płytki (`PIN_BUTTON = 0`, GPIO0) —
+  potwierdzone działanie EXT1 na sprzęcie. Zewnętrzny przycisk na GPIO3
+  przez `-DPIN_BUTTON=3`. Uwaga: GPIO0 to pin strapping (trzymany przy
+  starcie/reset uruchamia bootloader). Każdy gest przycisku daje okno
+  konsoli 10 s (wg `POWER.md`) — urządzenie nie zasypia natychmiast po
+  np. wyjściu z LEARN/SINGLE. LEARN/SINGLE nadal nie śpią (bez zmian).
+- Kalibracja pola ciśnienia `P` wg wyświetlacza auta: skala rtl_433
+  (2,5 kPa/bit) nie jest potwierdzona (nagrania mają `P=0`), a auto pokazywało
+  284 kPa dla 260 kPa. Korekta skalująca `TPMS_PRESSURE_KPA100_PER_RAW`
+  (273 = 2,73 kPa/bit; `P=95` dla 260 kPa) w firmware, modelu Pythona
+  i oczekiwaniach `verify_rtl433.py`. Na podstawie jednego punktu
+  pomiarowego — do dostrajania po kolejnych odczytach z auta.
 - Audyt integracji sprzęt–firmware (2026-10-28), spójność ESP32-S2-MINI +
   CC1101 SMA + LM317T:
   - Budzenie EXT1: pociągnięcia RTC przycisku i LF konfigurowane przed deep

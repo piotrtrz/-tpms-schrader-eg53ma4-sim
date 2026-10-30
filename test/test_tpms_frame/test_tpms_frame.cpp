@@ -36,19 +36,21 @@ static void test_four_independent_capture_payloads(void)
 
 static void test_known_frame_and_pressure_temperature(void)
 {
+    /* Wektor zregenerowany po kalibracji pola P wg auta (260 kPa -> P=95);
+     * rownolegle do tools/tpms_frame.py. Sam kod Manchester bez zmian. */
     static const uint8_t expected[TPMS_TX_BYTES] = {
         0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,
         0xCB,0x4B,0x2C,0xAA,0xAA,0xAA,0xD4,0xAA,0xB3,0x55,
-        0x4B,0x2A,0xD4,0xAC,0xD3,0x2A,0xCB,0x2C,0xD2,0xCC,
+        0x4B,0x2A,0xD4,0xAC,0xCD,0x54,0xCB,0x2C,0xCD,0x4A,
     };
     uint8_t frame[TPMS_TX_BYTES];
     uint8_t payload[TPMS_PAYLOAD_LEN];
     TEST_ASSERT_TRUE(tpms_build_frame(frame, 0x2FC871u, 2600u, 23, 0x4C900070u));
     TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, frame, TPMS_TX_BYTES);
     TEST_ASSERT_TRUE(tpms_build_payload(payload, 0x123456u, 2600u, 23, 0x4C900070u));
-    TEST_ASSERT_EQUAL_HEX8(0x68, payload[7]); /* 260 kPa / 2.5 = 104 */
+    TEST_ASSERT_EQUAL_HEX8(0x5F, payload[7]); /* 260 kPa -> 95 (2,73 kPa/bit) */
     TEST_ASSERT_EQUAL_UINT8(73u, payload[8]);
-    TEST_ASSERT_EQUAL_HEX8(0x99, payload[9]);
+    TEST_ASSERT_EQUAL_HEX8(0x90, payload[9]);
 }
 
 static bool decode_strict(const uint8_t *frame, size_t length,
@@ -104,15 +106,17 @@ static void test_manchester_polarity_and_negative_frames(void)
 static void test_rounding_and_saturation(void)
 {
     uint8_t p[TPMS_PAYLOAD_LEN];
-    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 12u, 0, 0u));
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 12u, 0, 0u));   /* 1.2 kPa */
     TEST_ASSERT_EQUAL_UINT8(0u, p[7]);
-    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 13u, 0, 0u));
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 13u, 0, 0u));   /* prog 13.7 */
+    TEST_ASSERT_EQUAL_UINT8(0u, p[7]);
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 14u, 0, 0u));
     TEST_ASSERT_EQUAL_UINT8(1u, p[7]);
-    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 2588u, -40, 0u));
-    TEST_ASSERT_EQUAL_UINT8(104u, p[7]);
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 2608u, -40, 0u)); /* prog 2607.2 */
+    TEST_ASSERT_EQUAL_UINT8(96u, p[7]);
     TEST_ASSERT_EQUAL_UINT8(0u, p[8]);
-    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 2587u, 85, 0u));
-    TEST_ASSERT_EQUAL_UINT8(103u, p[7]);
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 2607u, 85, 0u));
+    TEST_ASSERT_EQUAL_UINT8(95u, p[7]);
     TEST_ASSERT_EQUAL_UINT8(185u, p[8]);
     TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 65535u, 127, 0u));
     TEST_ASSERT_EQUAL_UINT8(255u, p[7]);
