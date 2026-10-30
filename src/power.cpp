@@ -1,4 +1,4 @@
-/* Zasilanie i deep sleep. Stan zasilania NIE zmienia pol protokolu TPMS. */
+/* Power and deep sleep. Supply state does NOT change TPMS protocol fields. */
 #include <Arduino.h>
 #include <esp_sleep.h>
 #include <driver/gpio.h>
@@ -19,7 +19,7 @@ void power_init(void)
     gpio_hold_dis((gpio_num_t)PIN_CC1101_SCK);
     gpio_hold_dis((gpio_num_t)PIN_CC1101_MOSI);
 #if SOC_BT_SUPPORTED
-    /* ESP32-S2 nie ma radia Bluetooth; btStop istnieje tylko na chipach z BT. */
+    /* ESP32-S2 has no Bluetooth radio; btStop only exists on chips with BT. */
     btStop();
 #endif
 #if PIN_VBAT_ADC >= 0
@@ -57,18 +57,18 @@ void power_deep_sleep(uint32_t ms)
     gpio_deep_sleep_hold_en();
 
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
-    /* PARKING_SHUTDOWN nie istnieje: kazdy sen ma budzik i nie mozna
-     * zatrzymac urzadzenia do czasu recznego wybudzenia. Dolny prog
-     * gwarantuje budzik takze dla mikrodrzemek. */
+    /* PARKING_SHUTDOWN does not exist: every sleep has an RTC alarm and the
+     * device cannot be stopped until a manual wake. The lower bound also
+     * guarantees an alarm for micro-naps. */
     if (ms < NAP_MIN_SLEEP_MS) {
         ms = NAP_MIN_SLEEP_MS;
     }
     esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000ULL);
 
 #if PIN_BUTTON >= 0 || PIN_LF_TRIGGER >= 0
-    /* Budzenie z pinow RTC (na ESP32-S2: GPIO0-21). Oba wejscia sa aktywne
-     * nisko, wiec moga wspoldzielic jeden tryb. ESP32-S2 nie obsluguje
-     * GPIO wakeup w deep sleep - uzywa EXT1 ANY_LOW. */
+    /* Waking from RTC pins (on ESP32-S2: GPIO0-21). Both inputs are active
+     * low, so they can share one mode. ESP32-S2 does not support GPIO wakeup
+     * in deep sleep - it uses EXT1 ANY_LOW. */
     uint64_t wake_mask = 0;
 #if PIN_BUTTON >= 0
     wake_mask |= 1ULL << PIN_BUTTON;
@@ -77,10 +77,10 @@ void power_deep_sleep(uint32_t ms)
     wake_mask |= 1ULL << PIN_LF_TRIGGER;
 #endif
 #if SOC_RTCIO_INPUT_OUTPUT_SUPPORTED
-    /* Cyfrowe pull-up/pull-down (pinMode) nie dzialaja w deep sleep, gdy
-     * domena RTC_PERIPH jest wylaczona. Bez pociagniec RTC piny budzenia
-     * plywaja i EXT1 moze budzic losowo; konfigurujemy je tu i utrzymujemy
-     * mechanizmem HOLD (wg ESP-IDF sleep_modes dla EXT1). */
+    /* Digital pull-up/pull-down (pinMode) does not work in deep sleep while
+     * the RTC_PERIPH domain is off. Without RTC pulls the wake pins float and
+     * EXT1 can wake randomly; we configure them here and keep them with the
+     * HOLD mechanism (per ESP-IDF sleep_modes for EXT1). */
 #if PIN_BUTTON >= 0
     rtc_gpio_init((gpio_num_t)PIN_BUTTON);
 #if BTN_ACTIVE_LEVEL == 0

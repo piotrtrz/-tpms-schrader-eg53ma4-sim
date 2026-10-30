@@ -1,125 +1,130 @@
-# Walidacja
+# Validation
 
-## Jedno polecenie bez sprzętu
+## One command without hardware
 
 ```bash
 bash tools/check_all
 ```
 
-Skrypt wykonuje self-test Pythona, testy native, pełny build ESP32, cppcheck,
-pobranie przypiętych źródeł (przy pierwszym uruchomieniu) oraz dekodowanie CU8
-przez prawdziwy `rtl_433`. Logi: `artifacts/validation/`. Każdy etap ma `pipefail`,
-a błąd kończy skrypt kodem niezerowym.
+The script runs the Python self-test, native tests, the full ESP32 build,
+cppcheck, fetching the pinned sources (on first run), and CU8 decoding by the
+real `rtl_433`. Logs: `artifacts/validation/`. Every stage has `pipefail`,
+and an error ends the script with a non-zero code.
 
-Alternatywa reprodukowalna:
+A reproducible alternative:
 
 ```bash
 docker build -t tpms-rc .
 docker run --rm -v "$PWD/artifacts:/work/artifacts" tpms-rc
 ```
 
-## Wyniki z 2026-10-28
+## Results from 2026-10-28
 
-Środowisko: Linux, Python 3.14.4 przy teście hosta; PlatformIO 6.1.18;
+Environment: Linux, Python 3.14.4 on the host test; PlatformIO 6.1.18;
 espressif32 8.0.0; Arduino ESP32 3.3.12; SmartRC CC1101 commit
 `de6757ef633b3e626dae5c7835cdb66ab53f9a1d`; rtl_433 commit `406f9a3…`;
-rtl_433_tests commit `1aa8c29…`. Pełne SHA znajdują się w `PROTOCOL.md`.
+rtl_433_tests commit `1aa8c29…`. Full SHAs are in `PROTOCOL.md`.
 
-| Komenda | Wynik |
+| Command | Result |
 |---|---|
-| `pio test -e native` | **24/24 PASS** — ramka, cztery niezależne wektory, negatywne, NVS, parsowanie konsoli (NaN/zakresy), fake clock/radio, Clone IDs, LEARN, SINGLE, ACC, restart |
-| `pio run -e esp32s2mini` | **PASS**, własne ostrzeżenia traktowane jako błędy (`-Werror`) |
-| `pio check -e native ... --fail-on-defect=low` | **PASS**, 0 defektów po poprawce inicjalizacji struktur |
-| `python3 tools/tpms_frame.py --self-test` | **PASS**, nagranie + 500 ramek |
-| `tools/verify_rtl433.sh` | **PASS**, 64/64 rekordy referencyjne; 3/3 syntetyczne; 3/3 negatywne odrzucone |
+| `pio test -e native` | **24/24 PASS** — frame, four independent vectors, negative tests, NVS, console parsing (NaN/ranges), fake clock/radio, Clone IDs, LEARN, SINGLE, ACC, restart |
+| `pio run -e esp32s2mini` | **PASS**, own warnings treated as errors (`-Werror`) |
+| `pio check -e native ... --fail-on-defect=low` | **PASS**, 0 defects after the struct initialisation fix |
+| `python3 tools/tpms_frame.py --self-test` | **PASS**, capture + 500 frames |
+| `tools/verify_rtl433.sh` | **PASS**, 64/64 reference records; 3/3 synthetic; 3/3 negative rejected |
 | `git diff --check` | **PASS** |
-| `bash tools/package_release.sh` | **PASS**, obraz ESP32-S2 z bootloaderem od `0x1000` i manifestem SHA-256 |
+| `bash tools/package_release.sh` | **PASS**, ESP32-S2 image with the bootloader at `0x1000` and a SHA-256 manifest |
 
-Dane referencyjne: każdy z `gfile001`…`gfile004` dał dokładnie 16 zgodnych
-rekordów, z oczekiwanym ID/flags/ciśnieniem/temperaturą. Syntetyczne ramki
-2FC871/260 kPa/73 F, 3495AC/220 kPa/23 F i ABCDEE/262,5 kPa/75 F zostały
-zdekodowane przez niezależny `rtl_433`. Uszkodzony Manchester, zła suma i ucięcie
-nie dały rekordu EG53MA4.
+Reference data: each of `gfile001`…`gfile004` produced exactly 16 matching
+records, with the expected ID/flags/pressure/temperature. The synthetic frames
+2FC871/260 kPa/73 F, 3495AC/220 kPa/23 F and ABCDEE/262.5 kPa/75 F were
+decoded by an independent `rtl_433`. Damaged Manchester, a wrong sum, and
+truncation produced no EG53MA4 record.
 
-## Macierz pokrycia
+## Coverage matrix
 
-| Warstwa | Automatyczne | RTL-SDR fizyczny | CC1101 fizyczny | Samochód |
+| Layer | Automated | Physical RTL-SDR | Physical CC1101 | Car |
 |---|---|---|---|---|
-| pola, checksum, kwantyzacja | wykonane | niepotrzebne do pola | niepotrzebne | potwierdzenie interpretacji ECU |
-| Manchester/preambuła/długość | wykonane | **niewykonane** | **niewykonane** | niewykonane |
-| prawdziwe nagrania → rtl_433 | wykonane, 64/64 | nie dotyczy | nie dotyczy | nie dotyczy |
-| syntetyczne CU8 → rtl_433 | wykonane | nie dotyczy | omija hardware | nie dotyczy |
-| rejestry CC1101/ogon/moc/częstotliwość | audyt kodu | wymagane | **wymagane** | wymagane |
-| NVS, ID, interwały, tryby | wykonane; NVS emulowane blobem | wymagany test restartu | wymagany | wymagany |
-| LEARN FL→FR→RR→RL | state-machine PASS | pomocnicze | wymagane | **niewykonane** |
-| pobór/brownout/ACC | state-machine ACC; brak pomiarów | nie dotyczy | wymagane | wymagane |
+| fields, checksum, quantisation | done | not needed for the field | not needed | confirmation of ECU interpretation |
+| Manchester/preamble/length | done | **not done** | **not done** | not done |
+| real recordings → rtl_433 | done, 64/64 | n/a | n/a | n/a |
+| synthetic CU8 → rtl_433 | done | n/a | bypasses hardware | n/a |
+| CC1101 registers/tail/power/frequency | code audit | required | **required** | required |
+| NVS, IDs, intervals, modes | done; NVS emulated with a blob | a restart test is required | required | required |
+| LEARN FL→FR→RR→RL | state machine PASS | auxiliary | required | **not done** |
+| consumption/brownout/ACC | ACC in the state machine; no measurements | n/a | required | required |
 
-**Brak podstaw do oznaczenia „validated”.** Gitea Actions ma workflow, ale stan
-runnera i wynik zdalnego CI należy sprawdzić; lokalny PASS nie jest udawanym CI.
+**There is no basis for a "validated" label.** Gitea Actions has a workflow,
+but the runner state and the remote CI result must be checked; a local PASS
+is not pretend CI.
 
-## Checklista HIL — wymaga użytkownika i sprzętu
+## HIL checklist — requires a user and hardware
 
-### CC1101 + analizator/RTL-SDR
+### CC1101 + analyser/RTL-SDR
 
-- [ ] Odczytać rejestry po inicjalizacji: OOK, 433,92 MHz, fixed 30 B,
-  `SYNC_MODE=0`, brak CRC/Manchester/whitening/FEC/append.
-- [ ] Na GDO0/ANT potwierdzić dokładnie 30 B, chip ~120 µs, pełny ostatni chip
-  i brak sprzętowej preambuły/sync/CRC/dodatkowych bajtów.
-- [ ] Zanotować TX-ERR/underflow; przy prawidłowym torze ma ich nie być.
-- [ ] Zmierzyć częstotliwość i względną moc dla −10 dBm; nie zakładać kalibracji
-  taniego modułu. Nie zwiększać PA bez potrzeby.
-- [ ] `send 1`…`send 4`: RTL-SDR dekoduje właściwe ID, 260 kPa i flags.
-- [ ] Powtórzyć po resecie i 10 cyklach deep sleep.
+- [ ] Read the registers after initialisation: OOK, 433.92 MHz, fixed 30 B,
+  `SYNC_MODE=0`, no CRC/Manchester/whitening/FEC/append.
+- [ ] On GDO0/ANT confirm exactly 30 B, a ~120 µs chip, a full last chip, and
+  no hardware preamble/sync/CRC/extra bytes.
+- [ ] Record TX-ERR/underflow; there should be none on a correct RF path.
+- [ ] Measure the frequency and relative power at −10 dBm; do not assume the
+  calibration of a cheap module. Do not raise the PA unnecessarily.
+- [ ] `send 1`…`send 4`: RTL-SDR decodes the correct IDs, 260 kPa and flags.
+- [ ] Repeat after a reset and 10 deep sleep cycles.
 
-### NVS i wejścia
+### NVS and inputs
 
-- [ ] Ustawić własne ID/ciśnienia/RF, odłączyć zasilanie na >1 min, ponownie
-  sprawdzić `info` i transmisję.
-- [ ] Sprawdzić odrzucenie duplikatu ID, złej mocy i złego interwału.
-- [ ] `factory YES` przywraca 260 kPa i domyślne RF.
-- [ ] Brownout/crank na zabezpieczonym zasilaczu: brak zawieszenia i uszkodzenia
-  konfiguracji; zapis wykonywać tylko po stabilizacji zasilania.
-- [ ] Jeśli ACC jest montowane: zmierzyć napięcie na GPIO dla OFF/ON/przepięcia,
-  sprawdzić interwały i samoczynne wznowienie po ACC ON. Bez ACC pominąć.
+- [ ] Set your own IDs/pressures/RF, disconnect power for >1 min, and re-check
+  `info` and transmission.
+- [ ] Verify rejection of a duplicate ID, a bad power, and a bad interval.
+- [ ] `factory YES` restores 260 kPa and the default RF.
+- [ ] Brownout/crank on a protected supply: no hang or configuration damage;
+  write settings only after the supply stabilises.
+- [ ] If ACC is installed: measure the GPIO voltage for OFF/ON/transients,
+  check the intervals and automatic resumption after ACC ON. Skip without
+  ACC.
 
-### Konkretny Opel Astra J
+### The specific Opel Astra J
 
-- [ ] Potwierdzić profil przez VIN/oznaczenia/diagnostykę przed nadawaniem.
-- [ ] Clone IDs: odbiór czterech znanych ID bez zakładania, że nauka zniknie.
-- [ ] New IDs: pełna nauka FL→FR→RR→RL z jednym aktywnym kołem.
-- [ ] Odczyt DTC i danych TPMS przed/po; zapisać wersję ECU i procedurę.
-- [ ] Test położenia: konsola środkowa/za schowkiem, ewentualnie bagażnik;
-  na postoju, bez zgadywania lokalizacji odbiornika.
-- [ ] Kontrola manometrem wszystkich opon przed i po. Nie wykonywać testu jako
-  jazdy drogowej z symulatorem zamiast sprawnego TPMS.
+- [ ] Confirm the profile via VIN/markings/diagnostics before transmitting.
+- [ ] Clone IDs: reception of the four known IDs without assuming learning
+  will vanish.
+- [ ] New IDs: full learning FL→FR→RR→RL with one active wheel.
+- [ ] DTC and TPMS data read before/after; record the ECU version and
+  procedure.
+- [ ] Position test: centre console/behind the glovebox, possibly the boot;
+  while parked, without guessing the receiver location.
+- [ ] A tyre gauge check of all wheels before and after. Do not perform the
+  test as a road drive with the simulator in place of a working TPMS.
 
-## Artefakty i wgrywanie
+## Artifacts and flashing
 
 ```bash
 bash tools/package_release.sh
 ```
 
-Katalog `artifacts/release/`:
+The `artifacts/release/` directory:
 
-| Plik | Adres |
+| File | Address |
 |---|---:|
-| `bootloader.bin` | `0x1000` — adres dla ESP32-S2, nie `0x0` jak w ESP32-C3 |
+| `bootloader.bin` | `0x1000` — the address for ESP32-S2, not `0x0` as in ESP32-C3 |
 | `partitions.bin` | `0x8000` |
 | `boot_app0.bin` | `0xE000` |
 | `firmware.bin` | `0x10000` |
-| `firmware-full.bin` | `0x0` — pełny obraz 4 MB |
-| `firmware.elf` | debug/symbole, nie wgrywać jako flash |
-| `SHA256SUMS`, `BUILD-INFO.txt` | kontrola integralności i wersji |
+| `firmware-full.bin` | `0x0` — the full 4 MB image |
+| `firmware.elf` | debug/symbols, do not flash it |
+| `SHA256SUMS`, `BUILD-INFO.txt` | integrity and version check |
 
-Pełny obraz kasuje poprzedni flash przy zapisie całego obszaru; NVS w partycji
-może zostać utracone — zapisz ID przed aktualizacją pełnym obrazem. Aktualizacja
-samej aplikacji `firmware.bin` pod `0x10000` zwykle zachowuje NVS, ale przed
-release użytkownik powinien wykonać test na własnym module.
+The full image erases the previous flash while writing the whole area; NVS in
+that partition may be lost — write down your IDs before updating with the
+full image. Updating only the application `firmware.bin` at `0x10000`
+usually preserves NVS, but before a release the user should test it on their
+own module.
 
 ```bash
 PORT=/dev/ttyACM0 bash tools/flash_release.sh
 (cd artifacts/release && sha256sum -c SHA256SUMS)
 ```
 
-Nie wgrywaj obrazu z innego toolchaina na ślepo. RC nie zawiera fizycznego testu
-update ani samochodu.
+Do not flash an image from another toolchain blindly. The RC contains no
+physical update test or car test.

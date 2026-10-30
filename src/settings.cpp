@@ -160,13 +160,13 @@ const char *settings_load_result_text(settings_load_result_t result)
 {
     switch (result) {
     case SETTINGS_LOAD_OK: return "OK";
-    case SETTINGS_LOAD_EMPTY: return "pusta konfiguracja";
-    case SETTINGS_LOAD_BAD_MAGIC: return "nieprawidlowy magic";
-    case SETTINGS_LOAD_BAD_VERSION: return "nieobslugiwana wersja";
-    case SETTINGS_LOAD_BAD_SIZE: return "nieprawidlowy rozmiar";
-    case SETTINGS_LOAD_BAD_CRC: return "blad CRC";
-    case SETTINGS_LOAD_INVALID: return "nieprawidlowe wartosci";
-    case SETTINGS_LOAD_IO_ERROR: return "blad NVS";
-    default: return "nieznany blad";
+    case SETTINGS_LOAD_EMPTY: return "empty configuration";
+    case SETTINGS_LOAD_BAD_MAGIC: return "bad magic";
+    case SETTINGS_LOAD_BAD_VERSION: return "unsupported version";
+    case SETTINGS_LOAD_BAD_SIZE: return "invalid size";
+    case SETTINGS_LOAD_BAD_CRC: return "CRC error";
+    case SETTINGS_LOAD_INVALID: return "invalid values";
+    case SETTINGS_LOAD_IO_ERROR: return "NVS error";
+    default: return "unknown error";
     }
 }

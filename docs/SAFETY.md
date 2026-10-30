@@ -1,42 +1,47 @@
-# Bezpieczeństwo i ograniczenia
+# Safety and limitations
 
-## Sztuczne dane mogą ukryć usterkę
+## Synthetic data can hide a fault
 
-To urządzenie generuje dane, których nie mierzy w oponach. Domyślne 260 kPa jest
-wartością testową, nie potwierdzeniem ciśnienia. Symulator może spowodować, że
-kontrolka nie ostrzeże o realnym przebiciu, utracie ciśnienia lub uszkodzeniu opony.
+This device generates data it does not measure in the tyres. The default
+260 kPa is a test value, not confirmation of pressure. The simulator may cause
+the warning light not to alert about a real puncture, pressure loss or tyre
+damage.
 
-- Projekt wyłącznie diagnostyczno-warsztatowy, na postoju i pod kontrolą osoby
-  wykonującej test.
-- Nie jest homologowanym czujnikiem ani zamiennikiem sprawnego TPMS.
-- Nie używaj w jeździe drogowej i nie przedstawiaj jako bezpiecznego do tego celu.
-- Przed i po teście sprawdź wszystkie opony niezależnym manometrem oraz ich stan.
-- Po diagnozie przywróć sprawne, właściwie dobrane czujniki i wykonaj wymaganą
-  procedurę pojazdu.
+- A diagnostic and workshop project only, on a parked car and under the
+  control of the person running the test.
+- It is not a homologated sensor nor a replacement for a working TPMS.
+- Do not use while driving and do not present it as safe for that purpose.
+- Before and after the test, check all tyres with an independent gauge and
+  inspect their condition.
+- After the diagnosis, restore working, correctly matched sensors and perform
+  the vehicle's required procedure.
 
-## Radio i zgodność pojazdu
+## Radio and vehicle compatibility
 
-Profil EG53MA4/OOK 433,92 MHz jest hipotezą roboczą dla wskazanego pojazdu do
-potwierdzenia. OE 13506028, numer powiązany lub oferta zamiennika nie wystarcza.
-Użyj VIN, oznaczeń fabrycznych czujników, diagnostyki albo kontrolowanego testu.
-Nie nadawaj z maksymalną mocą „dla pewności”. Zacznij od −10 dBm, ogranicz czas
-transmisji i przestrzegaj lokalnych przepisów dotyczących 433 MHz oraz ingerencji
-w elektronikę pojazdu. Urządzenie może być odbierane przez inne odbiorniki w pobliżu.
+The EG53MA4/OOK 433.92 MHz profile is a working hypothesis for the vehicle
+indicated, to be confirmed. OE 13506028, a related part number, or a
+replacement offer is not enough. Use the VIN, factory sensor markings,
+diagnostics, or a controlled test. Do not transmit at maximum power "to be
+sure". Start at −10 dBm, limit transmission time, and follow local 433 MHz
+regulations and rules about interfering with vehicle electronics. The device
+may be received by other receivers nearby.
 
-## Montaż
+## Installation
 
-- Tylko prototyp laboratoryjny jest opisany jako gotowy do złożenia. Wersja 12 V
-  wymaga osobnego projektu i testów automotive.
-- Nie podawaj 12 V na GPIO/ADC ani 5 V na CC1101.
-- Nie umieszczaj urządzenia w strefie poduszek, pedałów, ruchomych elementów,
-  wilgoci, wysokiej temperatury ani przy instalacji LPG.
-- Zabezpiecz obudowę i przewody przed poluzowaniem. Unikaj ekranowania anteny.
-- Nie używaj 18650 jako rekomendowanego zasilania w kabinie.
+- Only the laboratory prototype is described as ready to assemble. The 12 V
+  version requires a separate design and automotive tests.
+- Do not apply 12 V to GPIO/ADC or 5 V to the CC1101.
+- Do not place the device near airbags, pedals, moving parts, moisture, high
+  temperature, or the LPG installation.
+- Secure the enclosure and cables against loosening. Avoid shielding the
+  antenna.
+- Do not use an 18650 cell as the recommended power source in the cabin.
 
-## Diagnostyka bez fałszywej pewności
+## Diagnostics without false confidence
 
-Poprawne dekodowanie przez rtl_433 nie dowodzi odbioru przez samochód. Zielone CI
-nie zastępuje pomiaru CC1101, testu HIL ani kontroli opon. Zgaśnięcie kontrolki
-również nie dowodzi, że opony są sprawne. Zapisuj pomiary i nie zmieniaj wielu
-parametrów naraz. Brak potwierdzonego bitu niskiej baterii czujnika; niskie
-zasilanie emulatora nie jest kodowane jako usterka symulowanego czujnika.
+Correct decoding by rtl_433 does not prove reception by the car. Green CI does
+not replace a CC1101 measurement, an HIL test, or a tyre check. The warning
+light going out also does not prove the tyres are sound. Record measurements
+and do not change several parameters at once. There is no confirmed low
+battery bit of the sensor; low emulator supply is not encoded as a fault of
+the simulated sensor.

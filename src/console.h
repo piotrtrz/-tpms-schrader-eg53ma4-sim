@@ -1,5 +1,5 @@
 /*
- * console.h - debugowa konsola szeregowa (bez String, stalobuforowa)
+ * console.h - debug serial console (no String, fixed buffer)
  */
 #ifndef TPMS_CONSOLE_H
 #define TPMS_CONSOLE_H
@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 void console_init(void);
-void console_poll(void);     // nieblokujaca obsluga linii - wywolywac w petli
+void console_poll(void);     // non-blocking line handling - call in the loop
 
 #ifdef __cplusplus
 }

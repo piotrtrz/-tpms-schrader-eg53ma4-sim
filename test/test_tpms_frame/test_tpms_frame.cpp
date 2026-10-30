@@ -14,8 +14,8 @@ struct capture_vector_t {
 
 static void test_four_independent_capture_payloads(void)
 {
-    /* rtl_433_tests commit 1aa8c29, cztery nagrania, po 16 dekodowan.
-     * Wszystkie: flags=4c900070, pressure=0. Wartosci nie pochodza z generatora. */
+    /* rtl_433_tests commit 1aa8c29, four captures, 16 decodes each.
+     * All: flags=4c900070, pressure=0. The values do not come from a generator. */
     static const capture_vector_t vectors[] = {
         {0x2FC871u, 32, 90u, 0x0Eu},
         {0x2EAAF9u, 32, 90u, 0x77u},
@@ -36,8 +36,9 @@ static void test_four_independent_capture_payloads(void)
 
 static void test_known_frame_and_pressure_temperature(void)
 {
-    /* Wektor zregenerowany po kalibracji pola P wg auta (260 kPa -> P=95);
-     * rownolegle do tools/tpms_frame.py. Sam kod Manchester bez zmian. */
+    /* Vector regenerated after calibrating the P field against the car
+     * (260 kPa -> P=95); parallel to tools/tpms_frame.py. Manchester bit
+     * coding itself is unchanged. */
     static const uint8_t expected[TPMS_TX_BYTES] = {
         0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,
         0xCB,0x4B,0x2C,0xAA,0xAA,0xAA,0xD4,0xAA,0xB3,0x55,
@@ -48,7 +49,7 @@ static void test_known_frame_and_pressure_temperature(void)
     TEST_ASSERT_TRUE(tpms_build_frame(frame, 0x2FC871u, 2600u, 23, 0x4C900070u));
     TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, frame, TPMS_TX_BYTES);
     TEST_ASSERT_TRUE(tpms_build_payload(payload, 0x123456u, 2600u, 23, 0x4C900070u));
-    TEST_ASSERT_EQUAL_HEX8(0x5F, payload[7]); /* 260 kPa -> 95 (2,73 kPa/bit) */
+    TEST_ASSERT_EQUAL_HEX8(0x5F, payload[7]); /* 260 kPa -> 95 (2.73 kPa/bit) */
     TEST_ASSERT_EQUAL_UINT8(73u, payload[8]);
     TEST_ASSERT_EQUAL_HEX8(0x90, payload[9]);
 }
@@ -91,14 +92,14 @@ static void test_manchester_polarity_and_negative_frames(void)
 
     uint8_t damaged[TPMS_TX_BYTES];
     memcpy(damaged, frame, sizeof(frame));
-    damaged[10] &= 0x3Fu; /* dwa jednakowe chipy: niedozwolony Manchester */
+    damaged[10] &= 0x3Fu; /* two identical chips: invalid Manchester */
     TEST_ASSERT_FALSE(decode_strict(damaged, sizeof(damaged), payload));
     TEST_ASSERT_FALSE(decode_strict(frame, sizeof(frame) - 1u, payload));
 
     memcpy(damaged, frame, sizeof(frame));
-    /* Odwroc cala komorke Manchester (oba chipy) w bicie sumy kontrolnej:
-     * ramka pozostaje poprawnym Manchesterem, ale suma przestaje sie zgadzac,
-     * wiec odrzucenie nastepuje wlasnie na etapie checksum. */
+    /* Invert the whole Manchester cell (both chips) of the checksum bit:
+     * the frame remains a valid Manchester bitstream, but the sum stops
+     * matching, so rejection happens exactly at the checksum stage. */
     damaged[28] ^= 0x60u;
     TEST_ASSERT_FALSE(decode_strict(damaged, sizeof(damaged), payload));
 }
@@ -108,11 +109,11 @@ static void test_rounding_and_saturation(void)
     uint8_t p[TPMS_PAYLOAD_LEN];
     TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 12u, 0, 0u));   /* 1.2 kPa */
     TEST_ASSERT_EQUAL_UINT8(0u, p[7]);
-    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 13u, 0, 0u));   /* prog 13.7 */
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 13u, 0, 0u));   /* threshold 13.7 */
     TEST_ASSERT_EQUAL_UINT8(0u, p[7]);
     TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 14u, 0, 0u));
     TEST_ASSERT_EQUAL_UINT8(1u, p[7]);
-    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 2608u, -40, 0u)); /* prog 2607.2 */
+    TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 2608u, -40, 0u)); /* threshold 2607.2 */
     TEST_ASSERT_EQUAL_UINT8(96u, p[7]);
     TEST_ASSERT_EQUAL_UINT8(0u, p[8]);
     TEST_ASSERT_TRUE(tpms_build_payload(p, 1u, 2607u, 85, 0u));

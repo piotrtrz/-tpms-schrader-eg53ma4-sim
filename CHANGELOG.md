@@ -1,120 +1,129 @@
 # Changelog
 
-## Zmiany robocze po 2.0.0-rc.1
+## Work in progress after 2.0.0-rc.1
 
-- Mikrodrzemki zamiast jednego długiego snu (`config.h`: `NAP_PERIOD_MS`):
-  LED miga co ok. 2 s także między wysyłkami, po każdym budzeniu timera jest
-  widoczne mignięcie (`NAP_AWAKE_MS`). Sen to reszta okresu po czasie
-  boot + okno; TX ramek pozostaje co interwał (licznik snu w pamięci RTC,
-  `interval` wchodzi w życie przy następnym cyklu). `power_deep_sleep`
-  przyjmuje milisekundy. Wcześniej budzenie z timera gasiło LED w tym samym
-  `loop()` — błysk trwał kilka ms i budzenie było niewidoczne.
-- Przycisk: domyślnie przycisk BOOT płytki (`PIN_BUTTON = 0`, GPIO0) —
-  potwierdzone działanie EXT1 na sprzęcie. Zewnętrzny przycisk na GPIO3
-  przez `-DPIN_BUTTON=3`. Uwaga: GPIO0 to pin strapping (trzymany przy
-  starcie/reset uruchamia bootloader). Każdy gest przycisku daje okno
-  konsoli 10 s (wg `POWER.md`) — urządzenie nie zasypia natychmiast po
-  np. wyjściu z LEARN/SINGLE. LEARN/SINGLE nadal nie śpią (bez zmian).
-- Kalibracja pola ciśnienia `P` wg wyświetlacza auta: skala rtl_433
-  (2,5 kPa/bit) nie jest potwierdzona (nagrania mają `P=0`), a auto pokazywało
-  284 kPa dla 260 kPa. Korekta skalująca `TPMS_PRESSURE_KPA100_PER_RAW`
-  (273 = 2,73 kPa/bit; `P=95` dla 260 kPa) w firmware, modelu Pythona
-  i oczekiwaniach `verify_rtl433.py`. Potwierdzone na sprzęcie:
-  260 kPa → 260 kPa na wyświetlaczu auta.
-- Audyt integracji sprzęt–firmware (2026-10-28), spójność ESP32-S2-MINI +
-  CC1101 SMA + LM317T:
-  - Budzenie EXT1: pociągnięcia RTC przycisku i LF konfigurowane przed deep
-    sleep. Pull-up cyfrowy (`pinMode`) nie działa przy wyłączonej domenie
-    RTC_PERIPH (dokumentacja ESP-IDF), więc piny budzenia pływały i EXT1
-    mogło budzić losowo. Zalecany też zewnętrzny 10 kΩ.
-  - Konsola: parsowanie liczb odrzuca NaN i nieskończoność (wcześniej
-    `pressure nan` / `rf freq nan` przechodziły walidację; NaN trafiał do NVS
-    jako ciśnienie, a `rf freq nan` blokował późniejsze zapisy). Logika
-    parsowania wydzielona do przenośnego modułu `parse` z testami native.
-  - Zasilanie: dzielnik ADC R2 270 kΩ → 180 kΩ. Poprzedni dzielnik nasycał
-    ADC (pełna skala 2,5 V) już powyżej ok. 11,8 V i nie mierzył napięcia
-    instalacji 12 V w warunkach pracy 12,6–14,4 V.
-  - `tools/package_release.sh`: pełny obraz `merge_bin` z `--flash-freq 80m`
-    zgodnym z manifestem `lolin_s2_mini`; poprzednie `40m` nadpisywało
-    nagłówek bootloadera (80 MHz) innym parametrem niż build.
-  - `tools/tpms_frame.py`: saturacja temperatury do 0–255 zgodna z firmware
-    (temperatury ≤ −19 °C psuły ramkę w modelu Pythona).
-  - Testy: ujemny przypadek checksum odwraca całą komórkę Manchester
-    (poprzednio ćwiczył naruszenie Manchester zamiast sumy); nowy zestaw
-    `test_parse` (zakresy, NaN/inf); poprawiony diagram bitów w `PROTOCOL.md`.
-- Sprzęt docelowy zmieniono na ESP32-S2-MINI (ESP32-S2FN4R2, np.
-  ARD-ESP32-S2-MINI, płytka `lolin_s2_mini`); zaktualizowano target PlatformIO,
-  natywne USB CDC, pinout SPI/przycisku/ADC i polaryzację wbudowanej LED
-  (GPIO15, aktywna HIGH). ADC zasilania na GPIO1, opcjonalny LF na GPIO14.
-  `btStop()` kompilowane tylko na chipach z Bluetooth — ESP32-S2 go nie ma.
-- Moduł radiowy CC1101 433 MHz SPI ze złączem SMA i anteną (ARD-CC1101-ANT).
-- Zasilanie zewnętrzne przez regulowany LM317T (TO-220 metal, 1,25–37 V,
-  1,5 A): właściwy pinout ADJ–VOUT–IN, TAB = VOUT, dzielnik 240/390 Ω
-  dający ok. 3,28 V, kondensatory oraz wymagania ochrony i termiki.
-- Docelowe zasilanie z gniazda zapalniczki samochodowej: ładowarka USB
-  (wariant A) albo LM317T (wariant B). Przy gnieździe zasilanym „po stacyjce”
-  emulator nie pobiera prądu na postoju; brak transmisji parkingowej jest
-  akceptowalny, bo ECU auta nie odczytuje TPMS przy wyłączonym zapłonie.
-- Obrazy release dla ESP32-S2 używają `esptool --chip esp32s2` i bootloadera od
-  adresu `0x1000`; stare obrazy dla ESP32-C3 i ESP32-WROOM nie są kompatybilne.
+- Micro-naps instead of one long sleep (`config.h`: `NAP_PERIOD_MS`):
+  the LED blinks approximately every 2 s also between transmissions, and after
+  every timer wake a blink is visible (`NAP_AWAKE_MS`). Sleep is the remainder
+  of the period after boot time + window; TX of frames remains on the interval
+  (sleep counter in RTC memory, `interval` takes effect on the next cycle).
+  `power_deep_sleep` takes milliseconds. Previously, waking from the timer
+  turned the LED off in the same `loop()` — the blink lasted a few ms and the
+  wake-up was invisible.
+- Button: the board's BOOT button by default (`PIN_BUTTON = 0`, GPIO0) —
+  EXT1 behaviour confirmed on hardware. An external button on GPIO3 is
+  selected with `-DPIN_BUTTON=3`. Note: GPIO0 is a strapping pin (held at
+  power-up/reset it starts the bootloader). Every button gesture opens a 10 s
+  console window (per `POWER.md`) — the device does not fall asleep
+  immediately after, e.g., leaving LEARN/SINGLE. LEARN/SINGLE still do not
+  sleep (unchanged).
+- Calibration of the pressure field `P` against the car display: the rtl_433
+  scale (2.5 kPa/bit) is not confirmed (the captures have `P=0`), and the car
+  showed 284 kPa for 260 kPa. The scaling correction
+  `TPMS_PRESSURE_KPA100_PER_RAW` (273 = 2.73 kPa/bit; `P=95` for 260 kPa) was
+  applied in the firmware, the Python model, and the `verify_rtl433.py`
+  expectations. Confirmed on hardware: 260 kPa → 260 kPa on the car display.
+- Hardware–firmware integration audit (2026-10-28), consistency of
+  ESP32-S2-MINI + CC1101 SMA + LM317T:
+  - EXT1 wake: the RTC pulls for the button and LF are configured before deep
+    sleep. A digital pull-up (`pinMode`) does not work with the RTC_PERIPH
+    domain disabled (ESP-IDF documentation), so the wake pins floated and
+    EXT1 could wake randomly. An external 10 kΩ is also recommended.
+  - Console: number parsing rejects NaN and infinity (previously
+    `pressure nan` / `rf freq nan` passed validation; NaN ended up in NVS as
+    pressure, and `rf freq nan` blocked later writes). The parsing logic was
+    extracted into the portable `parse` module with native tests.
+  - Power: ADC divider R2 270 kΩ → 180 kΩ. The previous divider saturated the
+    ADC (2.5 V full scale) already above about 11.8 V and did not measure the
+    12 V installation under a 12.6–14.4 V operating range.
+  - `tools/package_release.sh`: the full `merge_bin` image uses `--flash-freq
+    80m` consistent with the `lolin_s2_mini` manifest; the previous `40m`
+    overwrote the bootloader header (80 MHz) with a parameter that differed
+    from the build.
+  - `tools/tpms_frame.py`: temperature saturation to 0–255 consistent with
+    the firmware (temperatures ≤ −19 °C corrupted the frame in the Python
+    model).
+  - Tests: the negative checksum case now inverts the whole Manchester cell
+    (previously it exercised a Manchester violation instead of the sum); a new
+    `test_parse` suite (ranges, NaN/inf); corrected the bit diagram in
+    `PROTOCOL.md`.
+- Target hardware changed to ESP32-S2-MINI (ESP32-S2FN4R2, e.g.
+  ARD-ESP32-S2-MINI, board `lolin_s2_mini`); updated the PlatformIO target,
+  native USB CDC, SPI/button/ADC pinout, and built-in LED polarity
+  (GPIO15, active HIGH). Supply ADC on GPIO1, optional LF on GPIO14.
+  `btStop()` is compiled only on chips with Bluetooth — the ESP32-S2 has none.
+- CC1101 433 MHz SPI radio module with an SMA connector and antenna
+  (ARD-CC1101-ANT).
+- External power through an adjustable LM317T (TO-220 metal, 1.25–37 V,
+  1.5 A): the correct ADJ–VOUT–IN pinout, TAB = VOUT, a 240/390 Ω divider
+  giving about 3.28 V, capacitors, and protection and thermal requirements.
+- Target power from the car cigarette-lighter socket: a USB charger (variant
+  A) or the LM317T (variant B). With an ignition-switched socket the emulator
+  draws no current while parked; the lack of parking transmission is
+  acceptable because the car ECU does not read TPMS with the ignition off.
+- ESP32-S2 release images use `esptool --chip esp32s2` and a bootloader at
+  address `0x1000`; older images for ESP32-C3 and ESP32-WROOM are incompatible.
 
 ## 2.0.0-rc.1 — 2026-10-27
 
-Release candidate bez testu fizycznego CC1101 i samochodu.
+Release candidate without a physical CC1101 test and a car test.
 
-### Dodane
+### Added
 
-- Trwała konfiguracja NVS z wersją, CRC32, walidacją zakresów, unikalnymi ID,
-  przywracaniem fabrycznym i bezpiecznymi domyślnymi.
-- Konsola: Clone IDs, generator nowych ID, ciśnienia/temperatura, interwały,
-  ograniczone RF, LEARN/SINGLE i diagnostyka bez rekompilacji.
-- Przenośna maszyna stanów z fake clock/radio, timeoutami i kolejnością
-  FL→FR→RR→RL. Testy restartu, ACC, błędów radia i zawinięcia `millis()`.
-- Niezależna walidacja czterech nagrań referencyjnych oraz syntetycznych CU8
-  przypiętym rtl_433; testy negatywne checksum/Manchester/ucięcie.
-- `tools/check_all`, Dockerfile, Gitea Actions, skrypty obrazów i SHA-256.
-- Polska dokumentacja użytkownika, sprzętu, zasilania, bezpieczeństwa i HIL.
+- Persistent NVS configuration with versioning, CRC32, range validation,
+  unique IDs, factory reset, and safe defaults.
+- Console: Clone IDs, a new-ID generator, pressures/temperature, intervals,
+  limited RF, LEARN/SINGLE, and diagnostics without recompilation.
+- Portable state machine with fake clock/radio, timeouts, and the
+  FL→FR→RR→RL order. Restart, ACC, radio-failure, and `millis()` wrap tests.
+- Independent validation of four reference recordings and synthetic CU8 with
+  the pinned rtl_433; negative checksum/Manchester/truncation tests.
+- `tools/check_all`, Dockerfile, Gitea Actions, image scripts, and SHA-256.
+- User, hardware, power, safety, and HIL documentation.
 
-### Zmienione
+### Changed
 
-- Domyślnie 260 kPa i −10 dBm, tylko OOK. Zachowany enkoder 30 B Manchester,
-  który przechodzi niezależne dekodowanie.
-- CC1101 czeka na `MARCSTATE=IDLE`, kontroluje underflow i pozostałe bajty,
-  zamiast polegać wyłącznie na czasie i `TXBYTES=0`.
-- Zwykły RTC nie otwiera okna konsoli; transmisja i powrót do snu ograniczają
-  szacowany pobór. Okno konsoli pozostaje po interakcji użytkownika.
-- Pełny build z `-Wall -Wextra -Werror`; cppcheck bez defektów.
+- Defaults of 260 kPa and −10 dBm, OOK only. The 30-byte Manchester encoder
+  is preserved and passes independent decoding.
+- The CC1101 waits for `MARCSTATE=IDLE`, checks underflow and leftover bytes,
+  instead of relying only on timing and `TXBYTES=0`.
+- A plain RTC wake does not open the console window; transmission and the
+  return to sleep limit the estimated consumption. The console window remains
+  open after user interaction.
+- Full build with `-Wall -Wextra -Werror`; cppcheck with zero defects.
 
-### Usunięte / naprawione
+### Removed / fixed
 
-- Usunięto zgadywany `TPMS_FLAGS_LOWBAT_MASK` i sprzężenie niskiego zasilania
-  emulatora z symulowanym sensorem. Zasilanie jest tylko ostrzeżeniem lokalnym.
-- Usunięto FSK z głównego flow: brak dowodu dla analizowanego profilu.
-- Usunięto `PARKING_SHUTDOWN`; każdy deep sleep ma RTC, więc restart ACC nie
-  może zostawić urządzenia trwale uśpionego.
-- Domyślne, niezwalidowane wejście LF jest wyłączone. Podstawowy LEARN nie
-  wymaga EL-50448.
-- Usunięto rekomendację MCP1703 + TVS 24 V jako ochrony automotive i obietnice
-  wieloletniej pracy baterii. Zasilanie 12 V ma wymagania projektowe, nie HIL.
+- Removed the guessed `TPMS_FLAGS_LOWBAT_MASK` and the coupling between the
+  emulator's low supply and the simulated sensor. The supply is only a local
+  warning.
+- Removed FSK from the main flow: no evidence for the analysed profile.
+- Removed `PARKING_SHUTDOWN`; every deep sleep has an RTC alarm, so an ACC
+  restart cannot leave the device permanently asleep.
+- The default, unvalidated LF input is disabled. Basic LEARN does not require
+  the EL-50448.
+- Removed the recommendation of MCP1703 + 24 V TVS as automotive protection
+  and the promises of multi-year battery operation. The 12 V supply has
+  design requirements, not HIL.
 
-### Iteracje audytu
+### Audit iterations
 
-1. **Stan początkowy:** 7/7 native i build PASS, ale konfiguracja przez
-   rekompilację, monolit stanów, lowbat i zasilanie wymagały naprawy. Utworzono
-   `archive/pre-opencode`.
-2. **Model danych:** dodano NVS/CRC/walidację i przenośne tryby. Pierwszy test
-   wykrył błędne oczekiwania testów dla zaległego tick i natychmiastowego TX;
-   po korekcji 20/20 native i ESP32 build PASS.
-3. **Walidacja RF:** audyt czterech nagrań potwierdził 16 powtórzeń i zmienne
-   odstępy. Zastąpiono pojedynczy wektor pełnym skryptem; 64/64 referencji,
-   3/3 syntetycznych i 3/3 negatywnych PASS.
-4. **Energia:** wykryto okno konsoli po każdym RTC; ograniczono je do interakcji.
-   Pobór nadal wyraźnie oznaczony jako szacowany.
-5. **Statycznie:** cppcheck wskazał inicjalizację struktur z float przez memset;
-   zamieniono na inicjalizację wartości i osiągnięto 0 defektów.
+1. **Initial state:** 7/7 native and build PASS, but configuration through
+   recompilation, a monolithic state machine, lowbat, and power needed
+   repair. Created `archive/pre-opencode`.
+2. **Data model:** added NVS/CRC/validation and portable modes. The first
+   test caught wrong test expectations for a pending tick and immediate TX;
+   after correction, 20/20 native and the ESP32 build PASS.
+3. **RF validation:** an audit of four recordings confirmed 16 repetitions
+   and variable gaps. A single vector was replaced with the full script;
+   64/64 references, 3/3 synthetic, and 3/3 negative PASS.
+4. **Energy:** a console window after every RTC wake was detected; it was
+   limited to interaction. Consumption is still clearly marked as estimated.
+5. **Static analysis:** cppcheck flagged memset-initialised float structs;
+   replaced with value initialisation and reached 0 defects.
 
-### Niezweryfikowane fizycznie
+### Not physically verified
 
-CC1101 na antenie/analizatorze, RTL-SDR z prototypem, pobór, brownout, ACC,
-aktualizacja flash, Clone IDs i LEARN z konkretnym Oplem. Brak oznaczenia
-„validated”.
+CC1101 on an antenna/analyser, RTL-SDR with the prototype, consumption,
+brownout, ACC, a flash update, Clone IDs and LEARN with the specific Opel. No
+"validated" label.

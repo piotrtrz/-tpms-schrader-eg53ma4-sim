@@ -1,23 +1,25 @@
-# Licencje i źródła
+# Licenses and sources
 
-Projekt jest rozpowszechniany na GPL-2.0-or-later (`LICENSE`). Wybór jest
-zgodny z wykorzystaniem w historii modelu algorytmu slicera z rtl_433. Nie
-przypisujemy sobie praw do kodu autorów zewnętrznych.
+The project is distributed under GPL-2.0-or-later (`LICENSE`). The choice is
+consistent with prior use of the slicer algorithm from rtl_433 in the model's
+history. We do not claim rights to external authors' code.
 
-- **rtl_433** — GPL-2.0-or-later; dekoder `schraeder.c`, Copyright Benjamin
-  Larsson, Christian W. Zuckschwerdt i kolejni autorzy. Używany jako niezależny
-  program do testów. Źródło i pełna historia: <https://github.com/merbanan/rtl_433>.
-  Referencja testów: commit `406f9a33550a2b6b3d0d8a8a486417ce5b3f13ab`.
-- **rtl_433_tests** — nagrania i metadane należą do ich autorów; nie są kopiowane
-  do artefaktu firmware ani release. Skrypt pobiera przypięty commit
-  `1aa8c29d6b9383739d1aeed495dbc5069b704392`.
-- **SmartRC-CC1101-Driver-Lib** — zewnętrzna biblioteka pobierana przez PlatformIO;
-  zachowane są jej oryginalne nagłówki i licencja. Użyty commit
+- **rtl_433** — GPL-2.0-or-later; the `schraeder.c` decoder, Copyright
+  Benjamin Larsson, Christian W. Zuckschwerdt and subsequent authors. Used as
+  an independent decoding program for testing. Source and full history:
+  <https://github.com/merbanan/rtl_433>. Test reference: commit
+  `406f9a33550a2b6b3d0d8a8a486417ce5b3f13ab`.
+- **rtl_433_tests** — the recordings and metadata belong to their authors;
+  they are not copied into the firmware artifact or the release. The script
+  fetches the pinned commit `1aa8c29d6b9383739d1aeed495dbc5069b704392`.
+- **SmartRC-CC1101-Driver-Lib** — an external library fetched by PlatformIO;
+  its original headers and license are preserved. Commit used:
   `de6757ef633b3e626dae5c7835cdb66ab53f9a1d`.
-- **Arduino ESP32 / ESP-IDF / PlatformIO / Unity** — zależności build/test na ich
-  własnych licencjach; nie są objęte deklaracją autorstwa tego projektu.
-- Issue rtl_433 #2978 służył wyłącznie jako wzorzec integracji CC1101. Kod
-  protokołu Renault nie jest kodem EG53MA4 i nie został użyty jako protokół.
+- **Arduino ESP32 / ESP-IDF / PlatformIO / Unity** — build/test dependencies
+  under their own licenses; they are not covered by the attribution of this
+  project.
+- rtl_433 issue #2978 served only as a CC1101 integration pattern. The
+  Renault protocol code is not EG53MA4 code and was not used as the protocol.
 
-Pełne teksty licencji zależności znajdują się w ich źródłach pobieranych podczas
-buildu. Ten plik nie zawęża ich praw ani licencji.
+The full license texts of the dependencies are in their sources, fetched
+during the build. This file does not narrow their rights or licenses.

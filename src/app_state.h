@@ -1,4 +1,4 @@
-/* Przenosna maszyna stanow NORMAL/LEARN/SINGLE (fake clock/radio w testach). */
+/* Portable NORMAL/LEARN/SINGLE state machine (fake clock/radio in tests). */
 #ifndef TPMS_APP_STATE_H
 #define TPMS_APP_STATE_H
 

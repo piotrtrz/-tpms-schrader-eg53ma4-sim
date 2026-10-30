@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Buduje obrazy ESP32-S2 i pelny obraz 4 MB oraz manifest SHA-256.
+# Builds the ESP32-S2 images, the full 4 MB image and the SHA-256 manifest.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -26,13 +26,13 @@ cp "$BOOT_APP0" "$OUT/boot_app0.bin"
               firmware-full.bin firmware.elf > SHA256SUMS
 )
 cat > "$OUT/BUILD-INFO.txt" <<'EOF'
-Wersja: 2.0.0-rc.1 (release candidate, bez HIL)
+Version: 2.0.0-rc.1 (release candidate, no HIL)
 PlatformIO: 6.1.18
-Platforma: espressif32 8.0.0, ESP32-S2-MINI ESP32-S2FN4R2 (lolin_s2_mini)
+Platform: espressif32 8.0.0, ESP32-S2-MINI ESP32-S2FN4R2 (lolin_s2_mini)
 CC1101: de6757ef633b3e626dae5c7835cdb66ab53f9a1d
-Adresy: 0x1000 bootloader, 0x8000 partitions, 0xe000 boot_app0, 0x10000 firmware
-Flash: dio, 80 MHz, 4 MB (zgodne z board manifest lolin_s2_mini)
-Pelny obraz firmware-full.bin: flash od 0x0.
+Addresses: 0x1000 bootloader, 0x8000 partitions, 0xe000 boot_app0, 0x10000 firmware
+Flash: dio, 80 MHz, 4 MB (consistent with the lolin_s2_mini board manifest)
+Full image firmware-full.bin: flash from 0x0.
 EOF
 cat "$OUT/BUILD-INFO.txt"
 cat "$OUT/SHA256SUMS"

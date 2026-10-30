@@ -9,8 +9,8 @@ jobs:
     runs-on: ubuntu-24.04
     container: python:3.12.12-slim-bookworm
     steps:
-      # nodejs jest potrzebne akcjom JS (checkout, upload-artifact) i musi być
-      # zainstalowane przed pierwszym krokiem "uses".
+      # nodejs is needed by the JS actions (checkout, upload-artifact) and must be
+      # installed before the first "uses" step.
       - name: Install build dependencies
         run: |
           apt-get update
@@ -21,11 +21,12 @@ jobs:
       - name: All tests without hardware
         run: bash ./tools/check_all
       - name: Upload validation reports
-        # Oficjalny upload-artifact@v4+ odmawia pracy poza github.com (pozostałe
-        # instancje uznaje za GHES), a GITHUB_SERVER_URL z konteksta zadania nadpisuje
-        # env kroku, więc obejście przez env nie działa. To fork polecany przez
-        # społeczność Gitei: kod oficjalnego v4, w którym jedynie isGhes() zwraca
-        # false. Przypięty do commita gałęzi v4 zamiast do pływającej nazwy.
+        # The official upload-artifact@v4+ refuses to run outside github.com
+        # (other instances are treated as GHES), and GITHUB_SERVER_URL from the
+        # job context overrides the step env, so the env workaround does not
+        # work. This is a fork recommended by the Gitea community: the official
+        # v4 code with only isGhes() returning false. Pinned to a commit of the
+        # v4 branch instead of a floating ref.
         uses: https://github.com/ChristopherHX/gitea-upload-artifact@81f940d004763f986ba3582c007fd842dd5cb0d7
         with:
           name: validation-reports

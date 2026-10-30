@@ -22,7 +22,7 @@ static void test_normal_clone_ids_sends_four_wheels_and_repeats(void)
 {
     settings_t cfg;
     settings_defaults(&cfg);
-    cfg.wheels[0].id = 0x111111u; /* Clone IDs: konfiguracja bez nauki. */
+    cfg.wheels[0].id = 0x111111u; /* Clone IDs: configuration without LEARN. */
     FakeRadio radio;
     AppState app(&cfg, &radio);
     app.begin(0u);
@@ -48,7 +48,7 @@ static void test_new_ids_learn_order_force_and_finish(void)
     TEST_ASSERT_EQUAL(AppMode::LEARN, app.mode());
     TEST_ASSERT_EQUAL_UINT8(1u, radio.count);
     TEST_ASSERT_EQUAL_UINT8(WHEEL_FL, radio.wheels[0]);
-    TEST_ASSERT_TRUE(app.send_current()); /* wymuszenie bez zmiany kola */
+    TEST_ASSERT_TRUE(app.send_current()); /* force TX without changing wheel */
     TEST_ASSERT_EQUAL_UINT8(2u, radio.count);
     app.short_press(100u);
     TEST_ASSERT_EQUAL_UINT8(WHEEL_FR, app.active_wheel());
@@ -77,7 +77,7 @@ static void test_learn_period_window_and_total_timeout(void)
     TEST_ASSERT_EQUAL(AppMode::LEARN, app.mode());
     app.tick(60000u, false);
     TEST_ASSERT_EQUAL(AppMode::NORMAL, app.mode());
-    TEST_ASSERT_EQUAL_UINT8(3u, radio.count); /* timeout nie nadaje nowej ramki */
+    TEST_ASSERT_EQUAL_UINT8(3u, radio.count); /* timeout sends no new frame */
 
     app.set_mode(AppMode::LEARN, WHEEL_FL, 100000u);
     app.tick(1000000u, false);
@@ -118,7 +118,7 @@ static void test_button_gestures(void)
     app.very_long_press(30u);
     TEST_ASSERT_EQUAL(AppMode::NORMAL, app.mode());
     app.short_press(40u);
-    TEST_ASSERT_EQUAL_UINT8(6u, radio.count); /* LEARN + SINGLE + 4 koła NORMAL */
+    TEST_ASSERT_EQUAL_UINT8(6u, radio.count); /* LEARN + SINGLE + 4 wheels NORMAL */
 }
 
 static void test_acc_intervals_without_permanent_shutdown(void)
@@ -179,7 +179,7 @@ static void test_millis_wrap_does_not_stall_learn(void)
     FakeRadio radio;
     AppState app(&cfg, &radio);
     app.set_mode(AppMode::LEARN, WHEEL_FL, UINT32_MAX - 1000u);
-    app.tick(1000u, false); /* uplynely 2001 ms po zawinieciu */
+    app.tick(1000u, false); /* 2001 ms elapsed after the wrap */
     TEST_ASSERT_EQUAL_UINT8(2u, radio.count);
 }
 

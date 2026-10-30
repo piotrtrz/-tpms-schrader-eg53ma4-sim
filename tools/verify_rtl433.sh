@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Zwraca niezerowy kod przy bledzie i zapisuje czytelny raport.
+# Returns a non-zero code on error and writes a readable report.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RTL433="${RTL433:-$ROOT/.cache/rtl_433/build/src/rtl_433}"

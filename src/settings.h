@@ -1,4 +1,4 @@
-/* Trwala konfiguracja uzytkownika; modul niezalezny od Arduino. */
+/* Persistent user configuration; module independent of Arduino. */
 #ifndef TPMS_SETTINGS_H
 #define TPMS_SETTINGS_H
 

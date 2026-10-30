@@ -1,19 +1,19 @@
 /*
- * ui.cpp - przycisk (gesty) i LED statusowy (nieblokujaco, bez delay())
+ * ui.cpp - button (gestures) and status LED (non-blocking, no delay())
  */
 #include <Arduino.h>
 #include "config.h"
 #include "ui.h"
 
-/* ---------------------------- przycisk ---------------------------- */
-/* Debounce: nowy stan surowy musi sie utrzymac BTN_DEBOUNCE_MS, zanim
- * zostanie uznany za stan stabilny (kandydat + czas jego zmiany). */
+/* ---------------------------- button ---------------------------- */
+/* Debounce: the new raw state must persist for BTN_DEBOUNCE_MS before it is
+ * accepted as stable (candidate + the time it changed). */
 
-static bool     btn_raw_last = false;    // ostatni surowy odczyt
-static uint32_t btn_raw_change = 0;      // czas ostatniej zmiany surowej
-static bool     btn_stable = false;      // stan po debounce
+static bool     btn_raw_last = false;    // last raw reading
+static uint32_t btn_raw_change = 0;      // time of the last raw change
+static bool     btn_stable = false;      // debounced state
 static uint32_t btn_press_start = 0;
-static bool     btn_long_fired = false;  // bardzo dlugie zdarzenie juz wyslane
+static bool     btn_long_fired = false;  // very long event already reported
 
 bool ui_button_down(void)
 {
@@ -31,7 +31,7 @@ void ui_init(void)
     btn_raw_last = raw;
     btn_raw_change = now;
     btn_stable = raw;
-    btn_press_start = now;      // start z wcisnietym przyciskiem = poczatek gestu
+    btn_press_start = now;      // starting pressed = beginning of a gesture
     btn_long_fired = false;
 }
 
@@ -42,12 +42,12 @@ ui_event_t ui_poll(void)
     uint32_t now = millis();
 
     if (raw != btn_raw_last) {
-        /* kandydat - czekaj az stan sie utrzyma */
+        /* candidate - wait until the state persists */
         btn_raw_last = raw;
         btn_raw_change = now;
     }
     else if (raw != btn_stable && (now - btn_raw_change) >= BTN_DEBOUNCE_MS) {
-        btn_stable = raw;               // zaakceptowany po debounce
+        btn_stable = raw;               // accepted after debounce
         if (btn_stable) {
             btn_press_start = now;
             btn_long_fired = false;
@@ -60,7 +60,7 @@ ui_event_t ui_poll(void)
         }
     }
 
-    /* bardzo dlugi przycisk sygnalizujemy od razu (nie czekajac na puszczenie) */
+    /* very long press is signalled immediately (without waiting for release) */
     if (btn_stable && !btn_long_fired && (now - btn_press_start) >= BTN_VERYLONG_MS) {
         btn_long_fired = true;
         ev = UI_EV_VERYLONG;
@@ -73,7 +73,7 @@ ui_event_t ui_poll(void)
 static ui_pat_t led_pat = UI_PAT_OFF;
 static uint8_t  led_blinks_left = 0;
 static bool     led_on = false;
-static bool     led_series = false;   // seria migniec w trakcie
+static bool     led_series = false;   // blink series in progress
 static uint32_t led_next = 0;
 
 void ui_set_pattern(ui_pat_t pat)
@@ -103,7 +103,7 @@ void ui_update(void)
 
     if (led_series) {
         if (led_on) {
-            /* koniec migniecia */
+            /* end of a blink */
             digitalWrite(PIN_LED, LED_ACTIVE_LEVEL ? LOW : HIGH);
             led_on = false;
             if (led_blinks_left > 0) {
@@ -112,13 +112,13 @@ void ui_update(void)
             led_next = now + 90;
         }
         else if (led_blinks_left > 0) {
-            /* kolejne migniecie */
+            /* next blink */
             digitalWrite(PIN_LED, LED_ACTIVE_LEVEL ? HIGH : LOW);
             led_on = true;
             led_next = now + 90;
         }
         else {
-            /* koniec serii - przerwa zalezna od wzorca */
+            /* end of the series - gap depends on the pattern */
             led_series = false;
             uint32_t idle = 2000;
             switch (led_pat) {
@@ -133,7 +133,7 @@ void ui_update(void)
         return;
     }
 
-    /* rozpoczynamy serie wg wzorca */
+    /* start the series for the pattern */
     if (led_pat == UI_PAT_OFF) {
         digitalWrite(PIN_LED, LED_ACTIVE_LEVEL ? LOW : HIGH);
         led_next = now + 50;

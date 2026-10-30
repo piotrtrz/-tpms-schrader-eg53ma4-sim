@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synteza CU8 OOK/Manchester dla niezaleznego testu rtl_433 (bez RF)."""
+"""CU8 synthesis of OOK/Manchester for an independent rtl_433 test (no RF)."""
 import argparse
 import math
 import os
@@ -18,7 +18,7 @@ def synth(bits: str, amp: float, noise: float, rng: random.Random):
     for n in range(int(round(len(bits) * samples_per_chip))):
         chip = bits[int(n / samples_per_chip) % len(bits)]
         amplitude = amp if chip == "1" else 0.0
-        phase += 0.1  # dowolna nośna w pasmie IQ; demodulator uzywa amplitudy
+        phase += 0.1  # any carrier inside the IQ band; the demodulator uses amplitude
         yield (amplitude * math.cos(phase) + rng.gauss(0, noise),
                amplitude * math.sin(phase) + rng.gauss(0, noise))
 
@@ -63,7 +63,7 @@ def main() -> int:
         output.extend(synth(bits, args.amp, args.noise, rng))
         output.extend(gap)
     write_cu8(args.out, output)
-    print(f"{args.out}: {len(output) / SAMPLE_RATE:.3f} s, {args.frames} ramek")
+    print(f"{args.out}: {len(output) / SAMPLE_RATE:.3f} s, {args.frames} frames")
     return 0
 
 

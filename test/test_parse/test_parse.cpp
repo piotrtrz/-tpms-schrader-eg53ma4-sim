@@ -47,8 +47,8 @@ static void test_float_ranges(void)
 
 static void test_float_rejects_nan_and_infinity(void)
 {
-    /* Regresja: NaN przechodzil stary test zakresu (obie strony falszywe),
-     * trafial do NVS jako cisnienie i blokowal zapis czestotliwosci RF. */
+    /* Regression: NaN passed the old range test (both comparisons false),
+     * ended up in NVS as pressure and blocked later RF frequency saves. */
     float value = 0.0f;
     TEST_ASSERT_FALSE(parse_float("nan", 0.0f, 637.5f, &value));
     TEST_ASSERT_FALSE(parse_float("-nan", 0.0f, 637.5f, &value));

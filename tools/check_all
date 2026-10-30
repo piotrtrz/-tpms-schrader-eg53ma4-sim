@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wszystkie testy mozliwe bez ESP32/CC1101/RTL-SDR/samochodu.
+# All tests possible without ESP32/CC1101/RTL-SDR/car.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -37,4 +37,4 @@ if [ ! -x "${RTL433:-$ROOT/.cache/rtl_433/build/src/rtl_433}" ] \
 fi
 run rtl433 bash ./tools/verify_rtl433.sh
 
-echo "PASS: wszystkie testy bez sprzetu zakonczone sukcesem"
+echo "PASS: all hardware-free tests completed successfully"

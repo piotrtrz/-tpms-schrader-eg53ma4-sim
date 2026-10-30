@@ -43,7 +43,7 @@ bool parse_float(const char *text, float lo, float hi, float *out)
     errno = 0;
     char *end = NULL;
     float value = strtof(text, &end);
-    /* Odwrocone porownanie odrzuca tez NaN (obie strony falszywe). */
+    /* Inverted comparison also rejects NaN (both sides false). */
     if (errno != 0 || end == text || *end != '\0'
             || !(value >= lo && value <= hi)) {
         return false;

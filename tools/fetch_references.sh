@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pobiera i buduje dokladnie przypiete, niezalezne referencje RF.
+# Fetches and builds the exactly pinned, independent RF references.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEPS="${DEPS_DIR:-$ROOT/.cache}"

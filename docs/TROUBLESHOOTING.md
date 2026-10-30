@@ -1,37 +1,38 @@
-# Rozwiązywanie problemów
+# Troubleshooting
 
-Pracuj po jednej zmianie i zapisuj pomiar. Nie przełączaj losowo OOK/FSK, flags,
-ID ani interwałów. Podstawowy firmware nie ma trybu FSK.
+Work one change at a time and record the measurement. Do not switch OOK/FSK,
+flags, IDs, or intervals randomly. The base firmware has no FSK mode.
 
-| Objaw | Możliwa przyczyna | Pomiar / sprawdzenie | Naprawa |
+| Symptom | Possible cause | Measurement / check | Repair |
 |---|---|---|---|
-| `BLAD: brak CC1101` | złe zasilanie, CS/SPI, moduł nie 433 MHz | 3,3 V na VCC-GND; ciągłość SCK/MISO/MOSI/CS = 4/5/6/7; oznaczenie modułu | popraw okablowanie, skróć SPI, użyj właściwego modułu |
-| Reset przy TX | spadek 3,3 V, słabe przewody | napięcie przy ESP32/CC1101 podczas `send`, log brownout | popraw zasilacz i 47–100 µF przy module; nie zwiększaj PA |
-| `TX-ERR` | underflow, niezakończony TX, zła konfiguracja CC1101 | log dla każdego koła; MARCSTATE/rejestry w HIL | sprawdź SPI i zasilanie; zapisz log do analizy, nie maskuj błędu |
-| USB/UART nie odpowiada | za krótkie okno konsoli, zły baud/port, kabel tylko do ładowania | 115200 8N1, reset, właściwy `/dev/ttyACM*` lub `/dev/ttyUSB*` | wpisz `stay 300` od razu po starcie; użyj kabla z danymi |
-| Zmiana ID znika | błąd zapisu NVS, pełny flash | komunikat `OK: zapisano`, restart i `info` | nie kontynuuj przy błędzie NVS; sprawdź flash/zasilanie |
-| ID odrzucone | duplikat, 0, FFFFFF, zła długość | sześć cyfr hex i `info` | nadaj cztery unikalne ID z 000001–FFFFFE |
-| rtl_433 nic nie dekoduje | antena, częstotliwość, zły tor RF, zbyt mała moc | `send 1`; odbiornik 433,92 MHz blisko; pomiar ANT/GDO0 | popraw antenę/zasilanie; stopniowo testuj niskie moce; nie zmieniaj na FSK |
-| rtl_433 widzi złe dane | stara konfiguracja, sąsiedni czujnik | `info`, `hex 1`, filtrowanie ID w odbiorniku | porównaj ID i wymuś `send 1` w izolowanym miejscu |
-| Auto nie widzi znanych ID | niepotwierdzony profil, ECU wymaga nauki, zasięg | VIN/oznaczenia/DTC; odbiór RTL-SDR przy aucie | potwierdź profil; wykonaj LEARN; zmień położenie po pomiarze |
-| LEARN stoi na jednym kole | użyto `send` zamiast `next` | `info` pokazuje aktywne koło | `next` po potwierdzeniu kroku; `send` tylko wymusza TX |
-| LEARN wróciło do NORMAL | 60 s na kole / 15 min sesji | czas od wejścia, komunikat i LED | uruchom `mode learn 1` i powtórz świadomie od FL |
-| Po RL nie ma następnego koła | sekwencja została zakończona | NORMAL w `info` | zakończ procedurę auta i sprawdź DTC |
-| Kontrolka nie gaśnie mimo RTL-SDR OK | ECU nie zna ID, inny profil/flags/procedura | odczyt ID i DTC z diagnostyki, nie tylko SDR | Clone IDs albo LEARN; potwierdź profil auta; nie zgaduj flags |
-| Pobór snu duży | S2 Mini, LM317T, LED, dzielniki | pomiar całej płytki i regulatora wg `POWER.md` | popraw zasilanie; nie zmieniaj protokołu |
-| Po postoju brak TX | zasilanie tylko z gniazda zapalniczki/ACC, brownout, błąd NVS/CC1101 | czy po wyłączeniu zapłonu zostaje 3,3 V; log po restarcie, `batt`, `info` | przy zasilaniu tylko z gniazda „po stacyjce” brak TX jest oczekiwany; w innym układzie popraw zasilanie |
-| ACC nie zmienia interwału | funkcja domyślnie wyłączona lub zły próg | `PIN_ACC`, napięcie na GPIO OFF/ON | zmontuj zabezpieczone wejście; nigdy 12 V na GPIO |
+| `ERROR: no CC1101` | poor supply, CS/SPI, module is not 433 MHz | 3.3 V across VCC-GND; continuity SCK/MISO/MOSI/CS = 4/5/6/7; module marking | fix wiring, shorten SPI, use the correct module |
+| Reset during TX | 3.3 V droop, weak wires | voltage at the ESP32/CC1101 during `send`, brownout log | fix the supply and 47–100 µF at the module; do not raise the PA |
+| `TX-ERR` | underflow, unfinished TX, wrong CC1101 configuration | log for each wheel; MARCSTATE/registers in HIL | check SPI and supply; save the log for analysis, do not mask the error |
+| USB/UART does not respond | console window too short, wrong baud/port, charge-only cable | 115200 8N1, reset, correct `/dev/ttyACM*` or `/dev/ttyUSB*` | type `stay 300` right after startup; use a data cable |
+| ID change disappears | NVS write error, full flash | `OK: saved` message, restart and `info` | do not continue on an NVS error; check flash/supply |
+| ID rejected | duplicate, 0, FFFFFF, wrong length | six hex digits and `info` | transmit four unique IDs from 000001–FFFFFE |
+| rtl_433 decodes nothing | antenna, frequency, wrong RF path, too little power | `send 1`; 433.92 MHz receiver close by; ANT/GDO0 measurement | fix antenna/supply; step through low powers gradually; do not switch to FSK |
+| rtl_433 sees wrong data | stale configuration, neighbouring sensor | `info`, `hex 1`, ID filtering in the receiver | compare IDs and force `send 1` in an isolated spot |
+| Car does not see known IDs | unconfirmed profile, ECU requires learning, range | VIN/markings/DTC; RTL-SDR reception at the car | confirm the profile; perform LEARN; change position after measuring |
+| LEARN stuck on one wheel | used `send` instead of `next` | `info` shows the active wheel | `next` after confirming the step; `send` only forces TX |
+| LEARN returned to NORMAL | 60 s per wheel / 15 min session | elapsed time, message and LED | run `mode learn 1` and consciously repeat from FL |
+| After RL there is no next wheel | the sequence completed | NORMAL in `info` | finish the car procedure and check DTC |
+| Warning light stays on although RTL-SDR is OK | ECU does not know the IDs, other profile/flags/procedure | read IDs and DTC from diagnostics, not only SDR | Clone IDs or LEARN; confirm the car profile; do not guess flags |
+| High sleep consumption | S2 Mini, LM317T, LED, dividers | measure the whole board and regulator per `POWER.md` | fix the supply; do not change the protocol |
+| No TX after parking | supply only from the lighter socket/ACC, brownout, NVS/CC1101 error | does 3.3 V remain after the ignition goes off; log after restart, `batt`, `info` | with an ignition-switched socket supply the lack of TX is expected; otherwise fix the supply |
+| ACC does not change the interval | feature disabled by default or wrong threshold | `PIN_ACC`, voltage on GPIO OFF/ON | build a protected input; never 12 V on GPIO |
 
-## Gdy brak odbioru w samochodzie
+## When the car does not receive
 
-Kolejność diagnostyczna:
+Diagnostic sequence:
 
-1. **Udowodnij lokalny TX:** `send 1` + RTL-SDR/analizator.
-2. **Udowodnij właściwy profil:** VIN, oznaczenia czujników, odczyt auta.
-3. **Sprawdź ID i kolejność:** `info`, Clone IDs albo jeden aktywny w LEARN.
-4. **Sprawdź zasięg:** niska moc najpierw, konsola/za schowkiem, ewentualnie
-   bagażnik; bez demontażu poduszek i zgadywania lokalizacji ECU.
-5. **Dopiero analizuj flags:** porównaj z nagraniem oryginalnego czujnika tego
-   samego trybu. Brak potwierdzonego bitu low battery — nie ustawiaj go.
-6. Jeśli nie ma pomiaru lub danych, zatrzymaj test. Losowe zmiany tworzą nowe
-   zmienne i nie stanowią diagnozy.
+1. **Prove local TX:** `send 1` + RTL-SDR/analyser.
+2. **Prove the correct profile:** VIN, sensor markings, car readout.
+3. **Check IDs and order:** `info`, Clone IDs, or one active wheel in LEARN.
+4. **Check range:** low power first, console/behind the glovebox, possibly the
+   boot; without disassembling airbags or guessing the ECU location.
+5. **Only then analyse flags:** compare with a recording of the original
+   sensor in the same mode. There is no confirmed low-battery bit — do not
+   set it.
+6. If there is no measurement or data, stop the test. Random changes add new
+   variables and are not a diagnosis.

@@ -1,4 +1,4 @@
-/* Generator ramek EG53MA4. Sztuczne dane wylacznie do diagnostyki. */
+/* EG53MA4 frame generator. Synthetic data for diagnostics only. */
 #include <string.h>
 
 #include "settings.h"
@@ -12,7 +12,7 @@ static void put_bit(uint8_t *buf, unsigned *nbits, unsigned value)
     ++(*nbits);
 }
 
-/* Polaryzacja potwierdzona nagraniami i rtl_433 OOK_MC_ZEROBIT: 0=01, 1=10. */
+/* Polarity confirmed by captures and rtl_433 OOK_MC_ZEROBIT: 0=01, 1=10. */
 static void put_cell(uint8_t *buf, unsigned *nbits, unsigned bit)
 {
     put_bit(buf, nbits, bit != 0u ? 1u : 0u);
@@ -68,7 +68,7 @@ bool tpms_build_frame(uint8_t out[TPMS_TX_BYTES], uint32_t id,
 
     memset(out, 0, TPMS_TX_BYTES);
     unsigned nbits = 0;
-    put_bit(out, &nbits, 1u); /* chip startowy */
+    put_bit(out, &nbits, 1u); /* starting chip */
     for (unsigned i = 0; i < TPMS_SYNC_BITS - 1u; ++i) {
         put_cell(out, &nbits, 0u);
     }

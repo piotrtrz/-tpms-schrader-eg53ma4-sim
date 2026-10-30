@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Walidacja prawdziwych i syntetycznych CU8 przez przypiety rtl_433."""
+"""Validation of real and synthetic CU8 with the pinned rtl_433."""
 import argparse
 import json
 import pathlib
@@ -50,7 +50,7 @@ def main() -> int:
 
     for filename, (sensor_id, temp_f) in EXPECTED.items():
         capture = args.reference_dir / filename
-        if not require(capture.is_file(), f"brak {capture}", failures):
+        if not require(capture.is_file(), f"missing {capture}", failures):
             continue
         status, records, raw = decode(args.rtl433, capture)
         valid = status == 0 and len(records) == 16 and all(
@@ -58,13 +58,13 @@ def main() -> int:
             and record.get("pressure_kPa") == 0.0
             and record.get("temperature_F") == temp_f
             and record.get("mic") == "CHECKSUM" for record in records)
-        require(valid, f"{filename}: niezgodne rekordy\n{raw}", failures)
-        print(f"{'OK' if valid else 'FAIL'} referencja {filename}: "
+        require(valid, f"{filename}: mismatched records\n{raw}", failures)
+        print(f"{'OK' if valid else 'FAIL'} reference {filename}: "
               f"{len(records)}/16, id={sensor_id}, flags=4c900070")
 
-    # rtl_433 liczy pole P skala 2,5 kPa/bit (niepotwierdzona); firmware
-    # koryguje ja stala PRESSURE_KPA100_PER_RAW, wiec oczekiwana wartosc
-    # z rtl_433 to surowy bajt P * 2.5, a nie zadane kPa.
+    # rtl_433 computes the P field on a 2.5 kPa/bit scale (unconfirmed); the
+    # firmware corrects it with the PRESSURE_KPA100_PER_RAW constant, so the
+    # expected rtl_433 value is the raw P byte * 2.5, not the requested kPa.
     synthetic = [("2FC871", 260, 23, 73.0), ("3495AC", 220, -5, 23.0),
                  ("ABCDEE", 262.5, 24, 75.0)]
     with tempfile.TemporaryDirectory(prefix="tpms-rtl433-") as temp:
@@ -82,8 +82,8 @@ def main() -> int:
                 and record.get("temperature_F") == temp_f
                 and record.get("flags") == "4c900070"
                 and record.get("mic") == "CHECKSUM" for record in records)
-            require(valid, f"syntetyczna {sensor_id}: {raw}", failures)
-            print(f"{'OK' if valid else 'FAIL'} syntetyczna id={sensor_id}: "
+            require(valid, f"synthetic {sensor_id}: {raw}", failures)
+            print(f"{'OK' if valid else 'FAIL'} synthetic id={sensor_id}: "
                   f"{len(records)} dekodowan, P={press_raw(pressure)} "
                   f"(rtl_433: {expect_kpa:.1f} kPa z {pressure:.1f} kPa), "
                   f"{temp_f:.1f} F")
@@ -95,11 +95,11 @@ def main() -> int:
                            check=True, capture_output=True)
             status, records, raw = decode(args.rtl433, capture)
             valid = status == 0 and not records
-            require(valid, f"negatywny {corruption}: blednie zdekodowano\n{raw}", failures)
-            print(f"{'OK' if valid else 'FAIL'} negatywny {corruption}: "
+            require(valid, f"negative {corruption}: decoded incorrectly\n{raw}", failures)
+            print(f"{'OK' if valid else 'FAIL'} negative {corruption}: "
                   f"{len(records)} dekodowan (oczekiwano 0)")
 
-    print(f"WYNIK: {'PASS' if not failures else 'FAIL'}; bledow={len(failures)}")
+    print(f"RESULT: {'PASS' if not failures else 'FAIL'}; errors={len(failures)}")
     for failure in failures:
         print(" - " + failure)
     return 1 if failures else 0

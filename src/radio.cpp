@@ -1,4 +1,4 @@
-/* CC1101: surowe 30 bajtow Manchester w fixed-length FIFO, bez wstawek HW. */
+/* CC1101: raw 30 Manchester bytes into the fixed-length FIFO, no HW extras. */
 #include <Arduino.h>
 #include <SPI.h>
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
@@ -30,13 +30,13 @@ bool radio_init(const settings_t *cfg)
     }
 
     ELECHOUSE_cc1101.setCCMode(1);
-    ELECHOUSE_cc1101.setModulation(2); /* ASK/OOK; brak profilu FSK. */
+    ELECHOUSE_cc1101.setModulation(2); /* ASK/OOK; no FSK profile. */
     ELECHOUSE_cc1101.setMHZ(cfg->frequency_mhz);
     ELECHOUSE_cc1101.setDRate(1000.0f / (float)TPMS_CHIP_US);
     ELECHOUSE_cc1101.setPA(cfg->tx_power_dbm);
     ELECHOUSE_cc1101.setChannel(0);
 
-    /* SYNC_MODE=0: packet engine nie dodaje preambuly ani slowa sync. */
+    /* SYNC_MODE=0: the packet engine adds no preamble or sync word. */
     ELECHOUSE_cc1101.setSyncMode(0);
     ELECHOUSE_cc1101.setPRE(0);
     ELECHOUSE_cc1101.setAdrChk(0);
@@ -66,8 +66,8 @@ bool radio_send_frame(const uint8_t *buf, uint8_t len)
     ELECHOUSE_cc1101.SpiWriteBurstReg(CC1101_TXFIFO, (uint8_t *)buf, len);
     ELECHOUSE_cc1101.SpiStrobe(CC1101_STX);
 
-    /* Czekamy na MARCSTATE, nie na samo TXBYTES=0: ostatni bajt moze byc
-     * jeszcze w rejestrze przesuwnym. Limit obejmuje start i pelny ogon. */
+    /* We wait for MARCSTATE, not just TXBYTES=0: the last byte may still be
+     * in the shift register. The limit covers the start and the full tail. */
     const uint32_t timeout_us = (uint32_t)len * 8u * TPMS_CHIP_US + 10000u;
     const uint32_t start = micros();
     bool finished = false;
@@ -78,7 +78,7 @@ bool radio_send_frame(const uint8_t *buf, uint8_t len)
             underflow = true;
             break;
         }
-        if (state == 0x01u) { /* IDLE po automatycznym zakonczeniu pakietu */
+        if (state == 0x01u) { /* IDLE after the automatic end of the packet */
             finished = true;
             break;
         }

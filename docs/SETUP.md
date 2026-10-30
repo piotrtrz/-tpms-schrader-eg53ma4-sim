@@ -1,23 +1,26 @@
-# Konfiguracja i uruchomienie
+# Configuration and startup
 
-## Przed rozpoczęciem
+## Before you start
 
-1. Sprawdź zgodność konkretnego auta (VIN, oznaczenia czujników, diagnostyka lub
-   odbiór). Nie polegaj wyłącznie na numerze z ogłoszenia.
-2. Zmontuj prototyp z `HARDWARE.md`, wgraj firmware i otwórz UART 115200.
-3. Wpisz `stay 300`. `info` pokazuje konfigurację aktywną, nie tylko zapisaną.
-4. Pracuj na postoju. Sztuczne 260 kPa nie opisuje rzeczywistych opon.
+1. Verify compatibility of the specific car (VIN, sensor markings,
+   diagnostics, or reception). Do not rely solely on a number from a listing.
+2. Assemble the prototype per `HARDWARE.md`, flash the firmware, and open a
+   115200 UART.
+3. Type `stay 300`. `info` shows the active configuration, not just the saved
+   one.
+4. Work on a parked car. The synthetic 260 kPa does not describe the real
+   tyres.
 
-Koła: `1=FL` przód lewy, `2=FR` przód prawy, `3=RR` tył prawy, `4=RL` tył lewy.
-Komendy konfiguracyjne automatycznie zapisują NVS i weryfikują odczyt. Błąd NVS
-trzeba rozwiązać przed dalszym testem, nie ignorować.
+Wheels: `1=FL` front left, `2=FR` front right, `3=RR` rear right, `4=RL` rear
+left. Configuration commands save to NVS automatically and verify the read
+back. An NVS error must be resolved before further testing, not ignored.
 
-## Ścieżka A — Clone IDs (preferowana)
+## Path A — Clone IDs (preferred)
 
-Użyj jej, jeśli wcześniej odczytano oryginalne ID i auto nadal je zna.
+Use it when the original IDs were read earlier and the car still knows them.
 
-1. Zapisz cztery ID w postaci sześciu cyfr hex.
-2. Wpisz kolejno (przykładowe wartości zastąp własnymi):
+1. Write down four IDs as six-digit hex.
+2. Enter in turn (replace the example values with your own):
 
    ```text
    id 1 2FC871
@@ -28,75 +31,81 @@ Użyj jej, jeśli wcześniej odczytano oryginalne ID i auto nadal je zna.
    info
    ```
 
-3. Sprawdź w `info`, że wszystkie ID i przypisania kół są właściwe. Duplikat,
-   `000000`, `FFFFFF` lub wartość poza 24 bitami zostanie odrzucona.
-4. Opcjonalnie `send` wymusi cykl wszystkich kół. W NORMAL urządzenie robi to
-   również automatycznie; po restarcie konfiguracja pozostaje.
-5. Potwierdź odbiór zewnętrznie. Znane ID **mogą** wyeliminować naukę, ale nie
-   obiecujemy tego dla każdego stanu ECU.
+3. Check in `info` that all IDs and wheel assignments are correct. A
+   duplicate, `000000`, `FFFFFF`, or a value beyond 24 bits will be rejected.
+4. Optionally, `send` forces a cycle of all wheels. In NORMAL the device does
+   it automatically as well; after a restart the configuration remains.
+5. Confirm reception externally. Known IDs **may** eliminate learning, but we
+   do not promise that for every ECU state.
 
-Nie używaj przykładowych ID w pojeździe, jeśli mogą pokrywać się z innym
-urządzeniem w pobliżu.
+Do not use the example IDs in a vehicle if they may coincide with another
+device nearby.
 
-## Ścieżka B — New IDs + LEARN
+## Path B — New IDs + LEARN
 
-### Przygotowanie
+### Preparation
 
-1. `ids new` generuje cztery unikalne ID. Można zamiast tego użyć czterech `id`.
-2. `info` — zapisz ID na kartce.
-3. Zapoznaj się z procedurą nauki dla konkretnej wersji nadwozia/wyposażenia.
-   Ten dokument nie zgaduje menu, sekwencji pedałów ani położenia odbiornika.
-4. Rozpocznij procedurę nauki w aucie zgodnie z instrukcją serwisową.
+1. `ids new` generates four unique IDs. You can use four `id` commands
+   instead.
+2. `info` — write the IDs down on paper.
+3. Read the learning procedure for the specific model/equipment version. This
+   document does not guess menus, pedal sequences, or the receiver location.
+4. Start the learning procedure in the car according to its service
+   instructions.
 
-### Nauka z konsoli
+### Learning from the console
 
-1. `mode learn` — start od FL; tylko FL nadaje co 2 s.
-2. `send` — natychmiastowy burst FL, bez zmiany koła.
-3. Po wykonaniu kroku dla FL: `next` — FR; LED wskaże 2 mrugnięcia.
-4. Powtórz `send`, potem `next` — RR, następnie `next` — RL.
-5. Po ostatnim `next` urządzenie wraca do NORMAL. Kolejność to zawsze
+1. `mode learn` — starts at FL; only FL transmits every 2 s.
+2. `send` — immediate FL burst, without changing the wheel.
+3. After completing the step for FL: `next` — FR; the LED shows 2 blinks.
+4. Repeat `send`, then `next` — RR, then `next` — RL.
+5. After the last `next` the device returns to NORMAL. The order is always
    **FL → FR → RR → RL**.
-6. Zakończ procedurę auta zgodnie z jej instrukcją i sprawdź odczyt diagnostyczny.
+6. Finish the car procedure according to its instructions and check the
+   diagnostic readout.
 
-### Nauka jednym przyciskiem
+### Learning with one button
 
-- wejście: przytrzymaj ≥1,5 s;
-- krótkie naciśnięcie: następne koło i natychmiastowy burst;
-- wymuszenie bez zmiany koła: konsola `send`;
-- wyjście przed końcem: ponownie ≥1,5 s albo `mode normal`.
+- enter: hold ≥1.5 s;
+- short press: next wheel and an immediate burst;
+- force without changing the wheel: console `send`;
+- exit before the end: hold ≥1.5 s again or `mode normal`.
 
-Timeout 60 s na koło przerywa LEARN do NORMAL; limit całej sesji to 15 min.
-Nie jest to automatyczny sukces nauki — trzeba zacząć od właściwego koła ponownie.
+A 60 s timeout per wheel aborts LEARN to NORMAL; the whole session limit is
+15 min. This is not an automatic learning success — you have to start again
+from the right wheel.
 
-## SINGLE / diagnostyka
+## SINGLE / diagnostics
 
-`mode single 2` nadaje tylko FR co 2 s. `send` wymusza FR, `next` przechodzi dalej.
-`mode normal` kończy; automatyczny limit wynosi 5 min. Tryb nie zapisuje wyboru
-koła w NVS i po utracie zasilania startuje bezpiecznie w NORMAL.
+`mode single 2` transmits only FR every 2 s. `send` forces FR, `next` moves
+on. `mode normal` ends it; the automatic limit is 5 min. The mode does not
+save the wheel selection in NVS and starts safely in NORMAL after a power
+loss.
 
-## Pozostałe ustawienia
+## Other settings
 
-| Komenda | Zakres / skutek |
+| Command | Range / effect |
 |---|---|
-| `pressure all 260` | 0–637,5 kPa, krok bajtu P ≈ 2,73 kPa (kalibracja wg auta, `PROTOCOL.md`) |
-| `temp all 23` | −40…85 °C; w ramce °F |
-| `interval normal 30` | interwał bez ACC, 5–86400 s |
-| `interval ignition 30` | z aktywnym sprzętowym ACC |
-| `interval parking 120` | bez aktywnego ACC |
-| `rf freq 433.92` | 433,05–434,79 MHz; zmiana wymaga uzasadnienia |
+| `pressure all 260` | 0–637.5 kPa, P byte step ≈ 2.73 kPa (calibrated per the car, `PROTOCOL.md`) |
+| `temp all 23` | −40…85 °C; °F in the frame |
+| `interval normal 30` | interval without ACC, 5–86400 s |
+| `interval ignition 30` | with hardware ACC active |
+| `interval parking 120` | without active ACC |
+| `rf freq 433.92` | 433.05–434.79 MHz; changes require justification |
 | `rf power -10` | −30, −20, −15, −10, −6, 0, 5 dBm |
-| `rf burst 3` | 1–8 ramek na koło |
-| `rf gap 50` | 20–500 ms między ramkami |
-| `flags 4C900070` | eksperyment; znaczenie bitów nie jest znane |
-| `factory YES` | kasuje własną konfigurację i przywraca domyślną |
+| `rf burst 3` | 1–8 frames per wheel |
+| `rf gap 50` | 20–500 ms between frames |
+| `flags 4C900070` | experiment; bit meanings are unknown |
+| `factory YES` | erases your configuration and restores defaults |
 
-Parametry harmonogramu są eksperymentalne. Moc zaczyna się od −10 dBm; zwiększaj
-tylko po pomiarze i z uwzględnieniem przepisów. Niski poziom zasilania emulatora
-nie ustawia żadnej flagi czujnika.
+Schedule parameters are experimental. Power starts at −10 dBm; increase it
+only after a measurement and with the regulations in mind. Low emulator
+supply sets no sensor flag.
 
-## Po restarcie lub brownout
+## After a restart or brownout
 
-Firmware ponownie czyta NVS. Poprawna wersja/CRC i zakresy są wymagane. Uszkodzony
-lub niezgodny wpis powoduje komunikat i powrót do domyślnych, a nie wysyłanie
-częściowo uszkodzonej konfiguracji. Każdy deep sleep ma budzik; nie ma trybu
-`PARKING_SHUTDOWN`, który mógłby zostawić auto bez transmisji do ręcznego wybudzenia.
+The firmware reads NVS again. A correct version/CRC and ranges are required.
+A damaged or incompatible entry produces a message and a return to defaults,
+rather than transmitting a partly corrupted configuration. Every deep sleep
+has an alarm; there is no `PARKING_SHUTDOWN` mode that could leave the car
+without transmission until a manual wake.

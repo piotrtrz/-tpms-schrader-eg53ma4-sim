@@ -33,7 +33,7 @@ void settings_store_begin()
     }
     if (last_load != SETTINGS_LOAD_OK) {
         settings_defaults(&g_settings);
-        /* Odzyskiwanie po uszkodzeniu: zapisz spojne domyslne. */
+        /* Recovery from corruption: save consistent defaults. */
         settings_store_save();
     }
 }

@@ -1,4 +1,4 @@
-/* Symulator diagnostyczny TPMS. Sztuczne cisnienie moze ukryc usterke opony. */
+/* TPMS diagnostic simulator. Synthetic pressure can mask a tyre fault. */
 #include <Arduino.h>
 #include <esp_attr.h>
 #include <esp_sleep.h>
@@ -19,8 +19,8 @@ static const char *const WHEEL_NAMES[WHEEL_COUNT] = {"FL", "FR", "RR", "RL"};
 static uint32_t stay_awake_until;
 static bool request_sleep;
 static uint32_t supply_mv;
-/* Mikrodrzemki: czas przespany od ostatniego cyklu TX i dlugosc ostatniego
- * kawalka snu przetrwaja deep sleep w pamieci RTC (kasowane przez power-on). */
+/* Micro-naps: time slept since the last TX cycle and the length of the last
+ * sleep slice survive deep sleep in RTC memory (cleared by power-on). */
 RTC_DATA_ATTR static uint32_t slept_ms;
 RTC_DATA_ATTR static uint32_t last_slice_ms;
 #if PIN_LF_TRIGGER >= 0
@@ -79,13 +79,13 @@ void app_request_sleep(void)
 bool app_save_and_apply(void)
 {
     if (!settings_store_save()) {
-        Serial.println(F("BLAD: nie zapisano NVS (walidacja lub zapis)"));
+        Serial.println(F("ERROR: NVS not saved (validation or write)"));
         return false;
     }
     if (!radio_init(&g_settings)) {
-        Serial.println(F("OSTRZEZENIE: zapisano, ale CC1101 nie odpowiada"));
+        Serial.println(F("WARNING: saved, but the CC1101 does not respond"));
     }
-    Serial.println(F("OK: zapisano w NVS"));
+    Serial.println(F("OK: saved in NVS"));
     return true;
 }
 
@@ -101,7 +101,7 @@ void app_print_frame(uint8_t wheel)
                           g_settings.flags)
             || !tpms_build_payload(payload, s.id, s.pressure_kpa10,
                                    (int8_t)s.temp_c, g_settings.flags)) {
-        Serial.println(F("BLAD: nieprawidlowa konfiguracja ramki"));
+        Serial.println(F("ERROR: invalid frame configuration"));
         return;
     }
     Serial.printf("%s payload:", WHEEL_NAMES[wheel]);
@@ -135,7 +135,7 @@ void app_print_info(void)
                   (unsigned long)g_settings.normal_interval_s,
                   (unsigned long)g_settings.ignition_interval_s,
                   (unsigned long)g_settings.parking_interval_s);
-    Serial.printf("Vcc=%u mV (nie zmienia flag TPMS)\n", (unsigned)supply_mv);
+    Serial.printf("Vcc=%u mV (does not change TPMS flags)\n", (unsigned)supply_mv);
 }
 
 static void sync_ui(void)
@@ -177,8 +177,8 @@ static void go_sleep(void)
         app_stay_awake(500u);
         return;
     }
-    /* Mikrodrzemka: reszta okresu po czasie boot+okno, zeby migniecia LED
-     * wypadaly co NAP_PERIOD_MS niezaleznie od dlugosci budzenia. */
+    /* Micro-nap: the rest of the period after boot time + window, so that
+     * LED blinks land on NAP_PERIOD_MS regardless of awake duration. */
     uint32_t awake_ms = millis();
     uint32_t slice_ms = NAP_PERIOD_MS;
     if (awake_ms + NAP_MIN_SLEEP_MS < NAP_PERIOD_MS) {
@@ -210,18 +210,18 @@ void setup(void)
 
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
 #if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
-    /* Chipy z GPIO wakeup w deep sleep (np. ESP32-C3). */
+    /* Chips with GPIO wakeup in deep sleep (e.g. ESP32-C3). */
     bool pin_wake = cause == ESP_SLEEP_WAKEUP_GPIO;
 #else
-    /* ESP32-S2: budzenie z pinow RTC zglasza EXT1. */
+    /* ESP32-S2: waking from RTC pins raises EXT1. */
     bool pin_wake = cause == ESP_SLEEP_WAKEUP_EXT1;
 #endif
     bool timer_wake = cause == ESP_SLEEP_WAKEUP_TIMER;
     if (timer_wake) {
         slept_ms += last_slice_ms;
     }
-    /* TX co interwal: power-on, budzenie po przespaniu calego cyklu albo
-     * wyczerpany licznik snu. Budzenie przyciskiem nie nadaje (jak wczesniej). */
+    /* TX on the interval: power-on, wake after sleeping the whole cycle, or
+     * an exhausted sleep counter. A button wake does not transmit (as before). */
     uint32_t interval_ms = g_app->interval_s(ignition_on()) * 1000u;
     bool transmit = !pin_wake && (!timer_wake || slept_ms >= interval_ms);
     bool quick_nap = timer_wake && !transmit;
@@ -232,15 +232,15 @@ void setup(void)
     bool radio_ready = radio_init(&g_settings);
     if (!quick_nap) {
         supply_mv = power_read_mv();
-        Serial.printf("\nTPMS DIAG FW %s - DANE SZTUCZNE, NIE DO JAZDY\n", FW_VERSION);
-        Serial.printf("NVS: %s; dostep=%s\n",
+        Serial.printf("\nTPMS DIAG FW %s - SYNTHETIC DATA, NOT FOR ROAD USE\n", FW_VERSION);
+        Serial.printf("NVS: %s; access=%s\n",
                       settings_load_result_text(settings_store_last_load()),
-                      settings_store_available() ? "tak" : "nie");
+                      settings_store_available() ? "yes" : "no");
         if (!radio_ready) {
-            Serial.println(F("BLAD: brak CC1101; sprawdz 3V3/SPI"));
+            Serial.println(F("ERROR: no CC1101; check 3V3/SPI"));
         }
         if (power_low_battery(supply_mv)) {
-            Serial.println(F("OSTRZEZENIE: niskie zasilanie emulatora"));
+            Serial.println(F("WARNING: emulator supply low"));
         }
     }
 
@@ -258,14 +258,14 @@ void setup(void)
         g_app->send_current();
     }
 #endif
-    /* Okna: power-on/przycisk/LF = konsola 10 s; budzenie timera = od razu
-     * sen po TX, a mikrodrzemka tylko na widoczne migniecie LED. */
+    /* Windows: power-on/button/LF = 10 s console; timer wake = straight to
+     * sleep after TX, the micro-nap only for a visible LED blink. */
     stay_awake_until = millis() + (timer_wake
             ? (transmit ? 0u : NAP_AWAKE_MS) : BOOT_STAY_AWAKE_MS);
     sync_ui();
     if (!quick_nap) {
         app_print_info();
-        Serial.println(F("gotowy; help = komendy; stay 60 = konsola 60 s"));
+        Serial.println(F("ready; help = commands; stay 60 = 60 s console"));
     }
 }
 
@@ -281,8 +281,8 @@ void loop(void)
     default: break;
     }
     if (ev != UI_EV_NONE) {
-        /* Kazdy gest = okno konsoli 10 s (POWER.md), takze po wyjsciu
-         * z LEARN/SINGLE - urzadzenie nie zasypia natychmiast po przycisku. */
+        /* Every gesture = a 10 s console window (POWER.md), also when leaving
+         * LEARN/SINGLE - the device does not fall asleep right after a button. */
         app_stay_awake(BOOT_STAY_AWAKE_MS);
     }
     console_poll();

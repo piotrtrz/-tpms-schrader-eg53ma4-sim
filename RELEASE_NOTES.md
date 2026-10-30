@@ -1,59 +1,66 @@
 # TPMS EG53MA4 Simulator 2.0.0-rc.1
 
-**Release candidate — 2026-10-27. Nie jest to release „validated”.**
+**Release candidate — 2026-10-27. This is not a "validated" release.**
 
-Diagnostyczny symulator czterech czujników Schrader EG53MA4 dla ESP32-S2-MINI
-(ESP32-S2FN4R2) + CC1101 433 MHz z anteną SMA. Profil docelowy obejmuje testy z Oplem Astra J Sedan 2016,
-ale zgodność konkretnego auta trzeba potwierdzić. Sztuczne dane mogą ukryć usterkę
-opony; nie używać w jeździe drogowej.
+A diagnostic simulator of four Schrader EG53MA4 sensors for the ESP32-S2-MINI
+(ESP32-S2FN4R2) + CC1101 433 MHz with an SMA antenna. The target profile
+includes tests with an Opel Astra J Sedan 2016, but compatibility of the
+specific car must be confirmed. Synthetic data can hide a tyre fault; do not
+use while driving.
 
-## Funkcje
+## Features
 
-- cztery trwałe, niezależne 24-bit ID; domyślnie 260 kPa dla każdego koła;
-- OOK/Manchester 433,92 MHz, niska konfigurowalna moc od −10 dBm;
-- Clone IDs oraz New IDs + LEARN FL→FR→RR→RL, SINGLE/diagnostics;
-- konfiguracja NVS przez UART bez rekompilacji, wersja/CRC/walidacja/factory reset;
-- przycisk, LED, timeouty, deep sleep z RTC i opcjonalne sprzętowe ACC;
-- automatyczne testy native/RF/build, Docker i artefakty SHA-256.
+- four persistent, independent 24-bit IDs; 260 kPa by default for every wheel;
+- OOK/Manchester 433.92 MHz, low configurable power from −10 dBm;
+- Clone IDs and New IDs + LEARN FL→FR→RR→RL, SINGLE/diagnostics;
+- NVS configuration over UART without recompilation, version/CRC/
+  validation/factory reset;
+- button, LED, timeouts, deep sleep with RTC and optional hardware ACC;
+- automated native/RF/build tests, Docker, and SHA-256 artifacts.
 
-## Wymagany sprzęt
+## Required hardware
 
-ESP32-S2-MINI (ESP32-S2FN4R2), CC1101 **433 MHz** 3,3 V ze złączem SMA
-(np. ARD-CC1101-ANT), antena, przycisk i odsprzężenie. LED jest wbudowana.
-Zasilanie docelowe z gniazda zapalniczki: ładowarka samochodowa USB albo
-LM317T z dzielnikiem 240/390 Ω i właściwymi kondensatorami; wariant 12 V
-wymaga ochrony wejścia i testów. Pełny BOM/pinout: HARDWARE. S2 Mini ani
-LM317T nie są samodzielnym, zwalidowanym rozwiązaniem automotive.
+ESP32-S2-MINI (ESP32-S2FN4R2), a CC1101 **433 MHz** 3.3 V module with an SMA
+connector (e.g. ARD-CC1101-ANT), an antenna, a button, and decoupling. The LED
+is built in. Target power from the cigarette-lighter socket: a car USB charger
+or an LM317T with a 240/390 Ω divider and proper capacitors; the 12 V variant
+requires input protection and tests. Full BOM/pinout: HARDWARE. Neither the
+S2 Mini nor the LM317T is a validated automotive solution on its own.
 
-## Instalacja i aktualizacja
+## Installation and update
 
-Nowa instalacja: `bash tools/check_all`, potem
+New installation: `bash tools/check_all`, then
 `pio run -e esp32s2mini -t upload`.
-Gotowe obrazy: `bash tools/package_release.sh`; adresy i flash opisano w VALIDATION.
-Przed pełnym flashem zapisz ID — partycja NVS może zostać skasowana. Konfigurację
-sprawdź po restarcie przez `info`. Migracji z wersji 1.0 bez NVS nie ma; należy
-wpisać ID w konsoli jeden raz.
+Release images: `bash tools/package_release.sh`; addresses and flashing are
+described in VALIDATION. Before a full flash, write down your IDs — the NVS
+partition may be erased. Verify the configuration after a restart with `info`.
+There is no migration from version 1.0 without NVS; enter the IDs in the
+console once.
 
-## Wyniki testów bez sprzętu (2026-10-28)
+## Test results without hardware (2026-10-28)
 
-- native: 24/24 PASS (po audycie integracji sprzęt–firmware);
-- pełny ESP32 build z `-Werror`: PASS;
-- cppcheck: PASS, 0 defektów;
-- rtl_433: 64/64 rekordy referencyjne, 3/3 syntetyczne, 3/3 negatywne: PASS.
+- native: 24/24 PASS (after the hardware–firmware integration audit);
+- full ESP32 build with `-Werror`: PASS;
+- cppcheck: PASS, 0 defects;
+- rtl_433: 64/64 reference records, 3/3 synthetic, 3/3 negative: PASS.
 
-Dokładne komendy i przypięte commity: VALIDATION/PROTOCOL.
+Exact commands and pinned commits: VALIDATION/PROTOCOL.
 
-## Znane ograniczenia
+## Known limitations
 
-- Nie zmierzono rzeczywistej emisji CC1101, ogona, mocy ani częstotliwości.
-- Nie wykonano RTL-SDR z anteną, pomiaru poboru, brownout ani testu ACC.
-- Nie wykonano Clone IDs/LEARN z samochodem; nie potwierdzono OE 13506028 dla
-  konkretnego VIN.
-- Znaczenie wszystkich flags pozostaje nieznane; brak zgadywanego low battery.
-- Harmonogram jest eksperymentalny, nie potwierdzony OE.
-- LM317T i zasilanie z gniazda zapalniczki nie są zwalidowanym projektem
-  automotive; przy zasilaniu wyłącznie z gniazda „po stacyjce” nie ma
-  transmisji po wyłączeniu zapłonu — ECU auta wtedy i tak nie nasłuchuje.
-- Gitea Actions wymaga działającego runnera; lokalne wyniki nie oznaczają CI PASS.
+- The real CC1101 emission, tail, power, and frequency were not measured.
+- RTL-SDR with an antenna, consumption measurement, brownout, and the ACC
+  test were not performed.
+- Clone IDs/LEARN with a car were not performed; OE 13506028 was not confirmed
+  for a specific VIN.
+- The meaning of all flags remains unknown; there is no guessed low-battery
+  bit.
+- The schedule is experimental, not confirmed as OE.
+- The LM317T and power from the cigarette-lighter socket are not a validated
+  automotive design; with power only from an ignition-switched socket there
+  is no transmission after the ignition goes off — the car ECU does not
+  listen then anyway.
+- Gitea Actions requires a working runner; local results do not mean CI PASS.
 
-Do czasu odhaczenia HIL w VALIDATION wynik pozostaje release candidate.
+Until the HIL items in VALIDATION are checked off, the result remains a
+release candidate.

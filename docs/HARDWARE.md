@@ -1,173 +1,184 @@
-# Sprzęt i montaż
+# Hardware and assembly
 
-## Zakres
+## Scope
 
-Podstawowy release opisuje **prototyp laboratoryjny na ESP32-S2-MINI**
-(ESP32-S2FN4R2). Przewody prototypowe i LM317T nie są gotowym zestawem do
-trwałego montażu w samochodzie. Wariant z gniazdem zapalniczki poniżej jest
-listą połączeń i wymagań projektowych, nie zwalidowanym schematem automotive.
+The base release describes a **laboratory prototype on the ESP32-S2-MINI**
+(ESP32-S2FN4R2). Prototype wires and the LM317T are not a ready kit for
+permanent installation in a car. The cigarette-lighter socket variant below
+is a list of connections and design requirements, not a validated automotive
+schematic.
 
-## BOM prototypu laboratoryjnego
+## Laboratory prototype BOM
 
-| Element | Wymaganie | Uwagi |
+| Item | Requirement | Notes |
 |---|---|---|
-| ESP32-S2-MINI | ESP32-S2FN4R2 (4 MB flash, 2 MB PSRAM), natywne USB do flash/konsoli; płytka typu Lolin/Wemos S2 Mini, np. ARD-ESP32-S2-MINI | sprzedawana z MicroPythonem — wgrywamy własny firmware; klon trzeba sprawdzić przed zasileniem |
-| CC1101 | moduł **433 MHz**, SPI, 3,3 V, ze złączem SMA i anteną, np. ARD-CC1101-ANT | nie kupuj wersji 868/915 MHz |
-| Antena 433 MHz | dołączona do modułu SMA; na biurko monopol λ/4 ≈ 17 cm | uziemienie/przeciwwaga zgodnie z konstrukcją modułu |
-| Przycisk NO (opcjonalny) | monostabilny | GPIO3 do GND; bez dodatkowego przycisku służy przycisk BOOT płytki (GPIO0) |
-| LED | wbudowana na GPIO15 | aktywna stanem wysokim; zewnętrzna LED nie jest potrzebna |
-| Ładowarka samochodowa USB | gniazdo zapalniczki → USB 5 V | wariant A zasilania; sprawdzona, z kablem USB-C z danymi |
-| LM317T | TO-220 (metal), regulowany 1,25–37 V, 1,5 A | tylko dla wariantu B; nie jest potrzebny przy zasilaniu z USB |
-| Rezystory LM317T | R1 = 240 Ω (VOUT–ADJ), R2 = 390 Ω (ADJ–GND) | dają ok. 3,28 V; 1% metalizowane, blisko układu |
-| Kondensatory LM317T | 100 nF na wejściu i min. 1 µF na wyjściu | praktycznie 10 µF; blisko układu |
-| Radiator | dla LM317T przy zasilaniu z 12–14,4 V | patrz obliczenia termiczne niżej |
-| Odsprzężenie modułów | 100 nF przy każdym module + 47–100 µF przy CC1101 | możliwie blisko pinów zasilania |
-| Przewody | krótkie, wspólna masa | SPI najlepiej <10 cm |
-| Zasilanie laboratoryjne | USB 5 V albo LM317T z bezpiecznego VIN | nie podawaj jednocześnie rywalizujących źródeł 3,3 V |
+| ESP32-S2-MINI | ESP32-S2FN4R2 (4 MB flash, 2 MB PSRAM), native USB for flash/console; a Lolin/Wemos S2 Mini type board, e.g. ARD-ESP32-S2-MINI | sold with MicroPython — we flash our own firmware; verify a clone before powering it |
+| CC1101 | **433 MHz** module, SPI, 3.3 V, with an SMA connector and antenna, e.g. ARD-CC1101-ANT | do not buy the 868/915 MHz version |
+| 433 MHz antenna | supplied with the SMA module; for a bench, a λ/4 monopole ≈ 17 cm | ground plane/counterweight per the module's design |
+| NO button (optional) | momentary | GPIO3 to GND; without an extra button the board's BOOT button (GPIO0) is used |
+| LED | built-in on GPIO15 | active high; an external LED is not needed |
+| Car USB charger | cigarette-lighter socket → USB 5 V | power variant A; tested, with a USB-C cable that carries data |
+| LM317T | TO-220 (metal), adjustable 1.25–37 V, 1.5 A | only for variant B; not needed when powering from USB |
+| LM317T resistors | R1 = 240 Ω (VOUT–ADJ), R2 = 390 Ω (ADJ–GND) | give about 3.28 V; 1% metal-film, close to the device |
+| LM317T capacitors | 100 nF on the input and at least 1 µF on the output | practically 10 µF; close to the device |
+| Heatsink | for the LM317T when fed from 12–14.4 V | see the thermal calculations below |
+| Module decoupling | 100 nF at each module + 47–100 µF at the CC1101 | as close to the supply pins as possible |
+| Wires | short, common ground | SPI best under 10 cm |
+| Laboratory supply | USB 5 V or the LM317T from a safe VIN | do not feed competing 3.3 V sources at the same time |
 
-Do diagnozy RF przydaje się RTL-SDR, ale nie jest częścią emulatora. Standardowy
-S2 Mini ma niebieską LED na GPIO15 i przycisk BOOT na GPIO0; przed montażem
-sprawdź konkretny klon, bo nazwy handlowe bywają używane dla różnych płytek.
+RTL-SDR is useful for RF diagnosis but is not part of the emulator. The
+standard S2 Mini has a blue LED on GPIO15 and a BOOT button on GPIO0; before
+assembly verify the specific clone, because trade names are sometimes used
+for different boards.
 
-## Pinout i połączenia
+## Pinout and connections
 
-| ESP32-S2-MINI | CC1101 / element | Zasada |
+| ESP32-S2-MINI | CC1101 / item | Rule |
 |---|---|---|
-| 3V3 | CC1101 VCC; wyjście LM317T przy zasilaniu zewnętrznym | **tylko 3,3 V**, nigdy wyjście 5 V ani LM317T ustawionego wyżej |
-| GND | CC1101 GND, przycisk, dzielnik LM317T | wspólna masa |
+| 3V3 | CC1101 VCC; LM317T output when externally powered | **3.3 V only**, never the 5 V pin nor an LM317T set higher |
+| GND | CC1101 GND, button, LM317T divider | common ground |
 | GPIO4 | SCK/SCLK | SPI |
 | GPIO5 | MISO/SO | SPI |
 | GPIO6 | MOSI/SI | SPI |
 | GPIO7 | CS/CSn/SS | SPI |
-| GPIO10 | GDO0 | diagnostyka biblioteki; GDO2 niepodłączony |
-| GPIO3 | alternatywny przycisk NO do GND (`-DPIN_BUTTON=3`) | pull-up RTC włączany przez firmware przed deep sleep (pull-up cyfrowy nie działa w deep sleep); RTC GPIO wakeup, zalecany zewnętrzny 10 kΩ |
-| GPIO15 | wbudowana LED | aktywna HIGH, firmware steruje właściwą polaryzacją |
-| GPIO1 | opcjonalny ADC zasilania przez dzielnik | `PIN_VBAT_ADC`, ADC1_CH0; dzielnik 1 MΩ/180 kΩ (`config.h`), zakres do ok. 16 V; nigdy 12 V wprost |
-| GPIO2 | opcjonalne ACC po zmianie `PIN_ACC` i zabezpieczeniu | nigdy 12 V wprost |
-| GPIO14 | opcjonalny detektor LF po zmianie `PIN_LF_TRIGGER` | aktywny LOW; RTC GPIO wakeup, domyślnie wyłączone |
-| GPIO0 | przycisk BOOT płytki = przycisk sterujący i budzenie RTC (domyślne `PIN_BUTTON`) | pin strapping: trzymany przy zasilaniu/reset uruchamia bootloader zamiast firmware (potwierdzone działanie budzenia na sprzęcie); nie używać do CC1101 |
+| GPIO10 | GDO0 | library diagnostics; GDO2 unconnected |
+| GPIO3 | alternative NO button to GND (`-DPIN_BUTTON=3`) | RTC pull-up enabled by the firmware before deep sleep (a digital pull-up does not work in deep sleep); RTC GPIO wakeup, an external 10 kΩ recommended |
+| GPIO15 | built-in LED | active HIGH; the firmware drives the correct polarity |
+| GPIO1 | optional supply ADC through a divider | `PIN_VBAT_ADC`, ADC1_CH0; 1 MΩ/180 kΩ divider (`config.h`), range up to about 16 V; never 12 V directly |
+| GPIO2 | optional ACC after changing `PIN_ACC` and protecting it | never 12 V directly |
+| GPIO14 | optional LF detector after changing `PIN_LF_TRIGGER` | active LOW; RTC GPIO wakeup, disabled by default |
+| GPIO0 | the board's BOOT button = the control button and RTC wake (default `PIN_BUTTON`) | strapping pin: held at power-up/reset it starts the bootloader instead of the firmware (wake behaviour confirmed on hardware); do not use for the CC1101 |
 
-GPIO0, GPIO45 i GPIO46 są pinami strapping. Nie dokładaj do nich zewnętrznych
-rezystorów ani układów wymuszających stan podczas resetu. GPIO19/20 obsługują
-natywne USB, a GPIO26–32 w ESP32-S2FN4R2 obsługują flash i PSRAM w obudowie —
-nie używaj ich. GPIO33–40 pozostają wolne; konsola korzysta z natywnego USB,
-więc zewnętrzny mostek USB-UART nie jest potrzebny.
+GPIO0, GPIO45 and GPIO46 are strapping pins. Do not add external resistors or
+state-forcing circuits to them during reset. GPIO19/20 carry native USB, and
+GPIO26–32 in the ESP32-S2FN4R2 serve the in-package flash and PSRAM — do not
+use them. GPIO33–40 remain free; the console uses native USB, so an external
+USB-UART bridge is not needed.
 
-Przy laboratoryjnym zasilaniu 3,3 V przez LM317T: zacznij od VIN = 5–9 V, ustaw
-limit np. 0,5 A, sprawdź polaryzację i napięcie wyjściowe bez podłączonego
-S2 Mini. Połącz GND, a na czas zasilania zewnętrznego odłącz USB. Prąd
-szczytowy zależy od płytki i ustawionego PA.
+With a laboratory 3.3 V supply from the LM317T: start with VIN = 5–9 V, set a
+limit of e.g. 0.5 A, check the polarity and output voltage without the S2
+Mini connected. Join the grounds, and disconnect USB while externally powered.
+Peak current depends on the board and the configured PA.
 
-## LM317T — wyprowadzenia, dzielnik i kondensatory
+## LM317T — pinout, divider, and capacitors
 
-Dla **LM317T w TO-220**, patrząc na oznaczenia od przodu z nóżkami w dół:
+For the **LM317T in TO-220**, looking at the markings from the front with the
+legs pointing down:
 
-| Nóżka | Funkcja | Połączenie |
+| Leg | Function | Connection |
 |---:|---|---|
-| 1 | ADJ | dzielnik: R1 do VOUT, R2 do GND |
-| 2 | VOUT | 3V3 S2 Mini + VCC CC1101 |
-| 3 | VIN | zabezpieczone napięcie wejściowe |
+| 1 | ADJ | divider: R1 to VOUT, R2 to GND |
+| 2 | VOUT | 3V3 of the S2 Mini + CC1101 VCC |
+| 3 | VIN | protected input voltage |
 
-Metalowy TAB jest połączony z **VOUT** — nie z GND jak w LF33CV czy 7805.
-Radiator i obudowa TAB nie mogą dotykać masy ani innych potencjałów.
-**Nie stosuj schematu nóżek 7805** — tutaj kolejność to ADJ–VOUT–IN.
+The metal TAB is connected to **VOUT** — not to GND as in the LF33CV or
+7805. The heatsink and TAB enclosure must not touch ground or any other
+potential. **Do not use the 7805 leg scheme** — the order here is
+ADJ–VOUT–IN.
 
-Napięcie wyjściowe ustawia dzielnik: `VOUT = 1,25 V × (1 + R2/R1)`. R1 = 240 Ω
-między VOUT a ADJ oraz R2 = 390 Ω między ADJ a GND dają ok. **3,28 V** i
-jednocześnie obciążenie ok. 5 mA, zbliżone do minimalnego prądu obciążenia
-LM317 — przy większych wartościach rezystorów zmierz VOUT bez obciążenia.
-Między VIN a GND daj 100 nF. Między VOUT a GND daj min. 1 µF; praktyczny
-punkt startowy to 10 µF. LM317 nie wymaga szczególnego ESR jak LDO, ale
-kondensatory mają być blisko układu. Dodatkowe 100 nF przy modułach
-i 47–100 µF przy CC1101 pozostają potrzebne.
+The output voltage is set by the divider: `VOUT = 1.25 V × (1 + R2/R1)`.
+R1 = 240 Ω between VOUT and ADJ, and R2 = 390 Ω between ADJ and GND give
+about **3.28 V**, while drawing about 5 mA, close to the LM317's minimum load
+current — with larger resistor values measure VOUT unloaded. Place 100 nF
+between VIN and GND. Place at least 1 µF between VOUT and GND; a practical
+starting point is 10 µF. The LM317 does not require special ESR like an LDO,
+but the capacitors should sit close to the device. An extra 100 nF at the
+modules and 47–100 µF at the CC1101 remain necessary.
 
-Nie podłączaj VOUT LM317T do pinu **5V** S2 Mini. Pin 5V zasila wbudowany
-regulator płytki, natomiast zewnętrzne, stabilizowane 3,3 V należy doprowadzić
-do **3V3**. Nie zasilaj jednocześnie z USB i LM317T bez sprawdzonej separacji
-źródeł, ponieważ konstrukcje klonów różnią się połączeniami zasilania.
+Do not connect the LM317T VOUT to the S2 Mini's **5V** pin. The 5V pin feeds
+the board's built-in regulator, whereas external, regulated 3.3 V must be
+brought to **3V3**. Do not power from USB and the LM317T at the same time
+without verified source separation, because clone designs differ in their
+power connections.
 
-## Antena i test położenia
+## Antenna and position test
 
-Nie zgadujemy położenia odbiornika TPMS w Astrze J. Test zasięgu wykonaj na
-postoju, z niską mocą, porównując odczyt RTL-SDR/diagnostykę dla kilku pozycji:
-konsola środkowa, okolica za schowkiem, ewentualnie bagażnik. Wynik dla jednego
-egzemplarza nie jest dowodem lokalizacji odbiornika.
+We do not guess the TPMS receiver location in the Astra J. Perform the range
+test while parked, at low power, comparing RTL-SDR readings/diagnostics for a
+few positions: centre console, near the glovebox, possibly the boot. A result
+for a single unit is not proof of the receiver location.
 
-Urządzenie mocuj mechanicznie, z dala od poduszek powietrznych i ich wiązek,
-strefy pedałów, ruchomych części, wilgoci, źródeł ciepła i metalowych ekranów.
-Nie owijaj anteny wiązką, nie prowadź jej przy żarówce/rozdzielaczu LPG ani przy
-przewodach zapłonowych. Obudowa prototypu powinna być nieprzewodząca; otwór na
-złącze SMA i konieczność ekranowania trzeba ocenić pomiarowo.
+Mount the device mechanically, away from airbags and their harnesses, the
+pedal area, moving parts, moisture, heat sources, and metal shielding. Do not
+wrap the antenna in a harness, do not route it near an LPG bulb/regulator or
+ignition wiring. The prototype enclosure should be non-conductive; the hole
+for the SMA connector and any need for shielding must be assessed by
+measurement.
 
-## Wariant „z gniazda zapalniczki” — wymagania, niezwalidowany projekt
+## Cigarette lighter socket variant — requirements, unvalidated design
 
-Docelowe zasilanie pochodzi z gniazda zapalniczki samochodowej, na dwa sposoby:
+The target power comes from the car cigarette-lighter socket, in two ways:
 
 ```text
-Wariant A (prostszy):
-gniazdo zapalniczki → ładowarka samochodowa USB (5 V) → kabel USB-C → USB S2 Mini
+Variant A (simpler):
+cigarette-lighter socket → car USB charger (5 V) → USB-C cable → S2 Mini USB
 
-Wariant B (stabilizator):
-gniazdo zapalniczki 12 V → bezpiecznik przy źródle → ochrona przed odwrotną
-polaryzacją → ograniczenie energii + właściwie dobrany TVS
-→ VIN LM317T → VOUT 3,3 V → 3V3 S2 Mini + VCC CC1101
+Variant B (regulator):
+cigarette-lighter socket 12 V → fuse at the source → reverse-polarity
+protection → energy limitation + properly rated TVS
+→ LM317T VIN → VOUT 3.3 V → S2 Mini 3V3 + CC1101 VCC
 ```
 
-W większości aut gniazdo zapalniczki jest zasilane tylko po przekręceniu
-stacyjki — **zweryfikuj to w swoim pojeździe**, bo część aut ma gniazdo
-zasilane na stałe. Przy gnieździe „po stacyjce” emulator nie pobiera prądu,
-gdy samochód jest wyłączony. Komputer samochodowy i tak zwykle nie odczytuje
-wtedy stanu TPMS, więc brak transmisji parkingowej nie ma znaczenia.
+In most cars the cigarette-lighter socket is powered only after the ignition
+is switched on — **verify this in your vehicle**, because some cars have a
+socket powered permanently. With an ignition-switched socket the emulator
+draws no current while the car is off. The car computer usually does not read
+TPMS state then anyway, so the lack of parking transmission does not matter.
 
-Samo wyjście gniazda nadal ma przepięcia i zakłócenia instalacji pojazdu.
-**Nie podłączaj go wprost do VIN LM317T jako gotowej instalacji samochodowej.**
-LM317T znosi różnicę VIN−VOUT do 37–40 V, więc jest odporniejszy na przepięcia
-niż LF33CV (16 V), ale ochrona nadal musi ograniczać napięcie z marginesem.
-TVS o progu powyżej dopuszczalnego VIN nie stanowi ochrony LM317T.
+The socket output itself still has transients and noise of the vehicle
+installation. **Do not connect it directly to the LM317T VIN as a finished
+car installation.** The LM317T tolerates a VIN−VOUT difference up to 37–40 V,
+so it is more tolerant of transients than the LF33CV (16 V), but protection
+still has to limit the voltage with margin. A TVS with a threshold above the
+maximum VIN provides no protection for the LM317T.
 
-Wymagania przed montażem (wariant B):
+Requirements before installation (variant B):
 
-- bezpiecznik dobrany do przewodów i poboru, blisko źródła; nie zastępuje TVS;
-- ochrona przed odwrotną polaryzacją i ujemnymi przepięciami;
-- TVS i ograniczenie energii dobrane do rzeczywistego profilu przepięć, bez
-  przewodzenia przy normalnym 14,4–14,8 V i bez przekraczania VIN LM317T;
-- kondensatory zgodne z kartą LM317, krótkie pętle prądowe;
-- pomiar szczytów prądu S2 Mini + CC1101 i sprawdzenie stabilności 3,3 V;
-- obliczenia termiczne dla najwyższej temperatury oraz testy brownout/crank/load
-  dump, EMC i ESD na docelowej płytce.
+- a fuse matched to the wiring and consumption, close to the source; it does
+  not replace a TVS;
+- reverse-polarity and negative-transient protection;
+- TVS and energy limitation matched to the real transient profile, without
+  conducting at a normal 14.4–14.8 V and without exceeding the LM317T VIN;
+- capacitors per the LM317 datasheet, short current loops;
+- a measurement of the current peaks of the S2 Mini + CC1101 and a check of
+  3.3 V stability;
+- thermal calculations for the highest temperature and tests of
+  brownout/crank/load dump, EMC, and ESD on the target board.
 
-LM317T jest regulatorem liniowym: `P = (VIN − 3,3 V) × I`. Już przy 14,4 V
-i 300 mA trzeba odprowadzić ok. **3,3 W**. Bez obliczenia i radiatora TO-220
-może się przegrzewać; samo „do 1,5 A” z karty nie gwarantuje zasilania szczytów
-ESP32-S2 w każdych warunkach. Zmierz prąd i temperaturę przy nadawaniu.
+The LM317T is a linear regulator: `P = (VIN − 3.3 V) × I`. Already at 14.4 V
+and 300 mA you must dissipate about **3.3 W**. Without a calculation and a
+TO-220 heatsink it can overheat; the "up to 1.5 A" from the datasheet alone
+does not guarantee ESP32-S2 peak supply in all conditions. Measure current
+and temperature while transmitting.
 
-**Konsekwencja zasilania wyłącznie z gniazda zapalniczki:** po wyłączeniu
-zapłonu cały emulator traci zasilanie. Nie wykonuje wtedy deep sleep ani
-transmisji parkingowych, RTC nie odlicza interwału, a ustawienie
-`interval parking` nie ma znaczenia. Wejście `PIN_ACC` nie jest potrzebne.
-Po przekręceniu stacyjki urządzenie po prostu startuje i nadaje. Jeżeli
-urządzenie ma nadawać również na postoju, potrzebne jest stale zasilane,
-zabezpieczone wejście oraz osobny, zabezpieczony sygnał ACC na GPIO2. Wtedy
-trzeba też zmierzyć pobór całego układu: dzielnik LM317T pobiera stale ok.
-5 mA, do tego S2 Mini, CC1101 i dzielniki — może być istotny przy długim
-postoju.
+**Consequence of powering only from the cigarette-lighter socket:** when the
+ignition goes off, the whole emulator loses power. It then performs no deep
+sleep or parking transmission, the RTC does not count the interval, and the
+`interval parking` setting has no effect. The `PIN_ACC` input is not needed.
+After the ignition is switched on, the device simply starts and transmits. If
+the device is to transmit while parked too, a permanently powered, protected
+input and a separate, protected ACC signal on GPIO2 are required. Then the
+consumption of the whole assembly also has to be measured: the LM317T divider
+draws a constant ~5 mA, plus the S2 Mini, the CC1101, and the dividers — it
+may matter on a long park.
 
-Parametry LM317T i wymagane kondensatory: karta ST
-[LM317](https://www.st.com/resource/en/datasheet/lm317.pdf), schemat
-typowej aplikacji i rysunek połączeń TO-220. Dostęp: 2026-10-28.
+LM317T parameters and required capacitors: the ST datasheet
+[LM317](https://www.st.com/resource/en/datasheet/lm317.pdf), the typical
+application schematic and the TO-220 pinout drawing. Accessed 2026-10-28.
 
-## Zasilanie bateryjne
+## Battery power
 
-Ogniwo 18650 w kabinie **nie jest rekomendowane**: temperatura w samochodzie może
-przekraczać bezpieczne warunki ogniwa, a zainstalowane ogniwo wymaga ochrony,
-właściwego ładowania i obudowy. ESP32 z radiem i okresowym czuwaniem zwykle daje
-krótki czas pracy; deklaracje wieloletniej pracy byłyby nieuzasadnione. Wieloletni
-wariant bateryjny wymaga innej architektury low-power i nie należy do tego release.
+An 18650 cell in the cabin is **not recommended**: the temperature in a car
+can exceed the cell's safe conditions, and an installed cell requires
+protection, proper charging, and an enclosure. An ESP32 with a radio and
+periodic duty cycling usually gives short runtime; claims of multi-year
+operation would be unfounded. A multi-year battery variant requires a
+different low-power architecture and is not part of this release.
 
-## Opcjonalny LF
+## Optional LF
 
-RC działa bez EL-50448. Nie ma w nim zwalidowanego odbiornika LF. Przyszły moduł
-wymaga osobnego schematu rezonansu/detekcji 125 kHz, progu komparatora, filtracji,
-testu odporności na zakłócenia i udowodnionego budzenia. Wyjście front-endu na
-GPIO14 ma być aktywne stanem niskim i w spoczynku wysokim. Sam aktywator nie
-wpisuje ID do emulatora.
+The RC works without the EL-50448. It contains no validated LF receiver. A
+future module requires a separate 125 kHz resonance/detection schematic, a
+comparator threshold, filtering, an interference-immunity test, and proven
+waking. The front-end output on GPIO14 is to be active-low and high at rest.
+The activator itself does not enter IDs into the emulator.
