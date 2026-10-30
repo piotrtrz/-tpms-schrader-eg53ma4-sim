@@ -34,8 +34,8 @@ Dekoder wymaga dokładnie 120 bitów: 40 bitów synchronizacji i 80 bitów danyc
   `P = 104` (260 kPa wg skali rtl_433) pokazuje się jako **284 kPa**, więc
   firmware koryguje skalę stałą `TPMS_PRESSURE_KPA100_PER_RAW`
   (`tpms_frame.h`, domyślnie 273 = 2,73 kPa/bit; `P = 95` dla 260 kPa).
-  Kwantyzacja: `(kPa×100 + 136) / 273`. Kalibracja oparta na jednym punkcie
-  pomiarowym — do potwierdzenia i ewentualnego dostrajania (`AUDIT.md`).
+  Kwantyzacja: `(kPa×100 + 136) / 273`. Kalibracja potwierdzona na sprzęcie:
+  260 kPa → 260 kPa na wyświetlaczu auta (`AUDIT.md`).
 - `T`: bajt w °F zgodnie z dekoderem, nie °C. 23 °C → 73 °F.
 - `sum`: suma dziewięciu poprzednich bajtów modulo 256; to nie CRC-8.
 - Wartość `4c900070` występuje we wszystkich 64 rekordach czterech nagrań.

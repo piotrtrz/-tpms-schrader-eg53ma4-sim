@@ -19,8 +19,8 @@
   (2,5 kPa/bit) nie jest potwierdzona (nagrania mają `P=0`), a auto pokazywało
   284 kPa dla 260 kPa. Korekta skalująca `TPMS_PRESSURE_KPA100_PER_RAW`
   (273 = 2,73 kPa/bit; `P=95` dla 260 kPa) w firmware, modelu Pythona
-  i oczekiwaniach `verify_rtl433.py`. Na podstawie jednego punktu
-  pomiarowego — do dostrajania po kolejnych odczytach z auta.
+  i oczekiwaniach `verify_rtl433.py`. Potwierdzone na sprzęcie:
+  260 kPa → 260 kPa na wyświetlaczu auta.
 - Audyt integracji sprzęt–firmware (2026-10-28), spójność ESP32-S2-MINI +
   CC1101 SMA + LM317T:
   - Budzenie EXT1: pociągnięcia RTC przycisku i LF konfigurowane przed deep

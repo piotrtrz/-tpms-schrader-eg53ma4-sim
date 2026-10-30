@@ -23,7 +23,7 @@
 | P2 | Model Pythona bez saturacji temperatury (roznica z C++) | clamp 0–255 + self-test | naprawione tpms_frame.py |
 | P3 | Ujemny test checksum ćwiczył Manchester zamiast sumy | odwrócenie całej komórki | naprawione test_tpms_frame |
 | P3 | Błędne offsety bitów w diagramie PROTOCOL.md | poprawne 72/96/104/112/120 | naprawione |
-| P1 | Skala pola ciśnienia `P` (2,5 kPa/bit) niezweryfikowana — wszystkie nagrania mają `P=0`, auto pokazuje 284 kPa dla 260 kPa | kalibracja z wyświetlaczem auta, poprawa przelicznika i testów | w toku; korekta skalująca 2,73 kPa/bit (`P=95` dla 260 kPa) wg 1 punktu: raw 104 → 284 kPa; czeka na potwierdzenie z auta |
+| P1 | Skala pola ciśnienia `P` (2,5 kPa/bit) niezweryfikowana — wszystkie nagrania mają `P=0`, auto pokazuje 284 kPa dla 260 kPa | kalibracja z wyświetlaczem auta, poprawa przelicznika i testów | naprawione; korekta skalująca 2,73 kPa/bit (`P=95` dla 260 kPa), HIL: 260 kPa → 260 kPa na wyświetlaczu; drugi punkt pomiarowy (np. 300 kPa) potwierdziłby liniowość w zakresie |
 
 ## Otwarte, wymagające sprzętu
 

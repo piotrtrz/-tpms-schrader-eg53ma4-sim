@@ -18,7 +18,8 @@ DEFAULT_FLAGS = 0x4C900070
 # bit bajtu P. Skala rtl_433 (250 = 2,5 kPa/bit) nie jest potwierdzona
 # nagraniami (wszystkie maja P=0), a pomiar z auta: 260 kPa -> 284 kPa na
 # wyswietlaczu przy P=104 => korekta skalujaca 2,73 kPa/bit (P=95 dla 260).
-# Do strojenia po feedbacku z auta - zmienic tez TPMS_PRESSURE_KPA100_PER_RAW.
+# Potwierdzone z autem: 260 kPa -> 260 kPa - zmienic tez
+# TPMS_PRESSURE_KPA100_PER_RAW w src/tpms_frame.h.
 PRESSURE_KPA100_PER_RAW = 273
 
 
