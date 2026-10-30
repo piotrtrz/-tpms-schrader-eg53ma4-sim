@@ -14,7 +14,7 @@ listą połączeń i wymagań projektowych, nie zwalidowanym schematem automotiv
 | ESP32-S2-MINI | ESP32-S2FN4R2 (4 MB flash, 2 MB PSRAM), natywne USB do flash/konsoli; płytka typu Lolin/Wemos S2 Mini, np. ARD-ESP32-S2-MINI | sprzedawana z MicroPythonem — wgrywamy własny firmware; klon trzeba sprawdzić przed zasileniem |
 | CC1101 | moduł **433 MHz**, SPI, 3,3 V, ze złączem SMA i anteną, np. ARD-CC1101-ANT | nie kupuj wersji 868/915 MHz |
 | Antena 433 MHz | dołączona do modułu SMA; na biurko monopol λ/4 ≈ 17 cm | uziemienie/przeciwwaga zgodnie z konstrukcją modułu |
-| Przycisk NO | monostabilny | GPIO3 do GND |
+| Przycisk NO (opcjonalny) | monostabilny | GPIO3 do GND; bez dodatkowego przycisku służy przycisk BOOT płytki (GPIO0) |
 | LED | wbudowana na GPIO15 | aktywna stanem wysokim; zewnętrzna LED nie jest potrzebna |
 | Ładowarka samochodowa USB | gniazdo zapalniczki → USB 5 V | wariant A zasilania; sprawdzona, z kablem USB-C z danymi |
 | LM317T | TO-220 (metal), regulowany 1,25–37 V, 1,5 A | tylko dla wariantu B; nie jest potrzebny przy zasilaniu z USB |
@@ -40,12 +40,12 @@ sprawdź konkretny klon, bo nazwy handlowe bywają używane dla różnych płyte
 | GPIO6 | MOSI/SI | SPI |
 | GPIO7 | CS/CSn/SS | SPI |
 | GPIO10 | GDO0 | diagnostyka biblioteki; GDO2 niepodłączony |
-| GPIO3 | przycisk NO do GND | pull-up RTC włączany przez firmware przed deep sleep (pull-up cyfrowy nie działa w deep sleep); RTC GPIO wakeup, zalecany zewnętrzny 10 kΩ |
+| GPIO3 | alternatywny przycisk NO do GND (`-DPIN_BUTTON=3`) | pull-up RTC włączany przez firmware przed deep sleep (pull-up cyfrowy nie działa w deep sleep); RTC GPIO wakeup, zalecany zewnętrzny 10 kΩ |
 | GPIO15 | wbudowana LED | aktywna HIGH, firmware steruje właściwą polaryzacją |
 | GPIO1 | opcjonalny ADC zasilania przez dzielnik | `PIN_VBAT_ADC`, ADC1_CH0; dzielnik 1 MΩ/180 kΩ (`config.h`), zakres do ok. 16 V; nigdy 12 V wprost |
 | GPIO2 | opcjonalne ACC po zmianie `PIN_ACC` i zabezpieczeniu | nigdy 12 V wprost |
 | GPIO14 | opcjonalny detektor LF po zmianie `PIN_LF_TRIGGER` | aktywny LOW; RTC GPIO wakeup, domyślnie wyłączone |
-| GPIO0 | przycisk BOOT płytki | pin strapping; nie używać do CC1101 ani przycisku sterującego |
+| GPIO0 | przycisk BOOT płytki = przycisk sterujący i budzenie RTC (domyślne `PIN_BUTTON`) | pin strapping: trzymany przy zasilaniu/reset uruchamia bootloader zamiast firmware (potwierdzone działanie budzenia na sprzęcie); nie używać do CC1101 |
 
 GPIO0, GPIO45 i GPIO46 są pinami strapping. Nie dokładaj do nich zewnętrznych
 rezystorów ani układów wymuszających stan podczas resetu. GPIO19/20 obsługują

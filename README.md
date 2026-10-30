@@ -30,7 +30,7 @@ ogłoszenie sprzedażowe same w sobie nie potwierdzają profilu radiowego.
  Prototyp na biurku:
  USB-C ──> [ESP32-S2-MINI] ── SPI ──> [CC1101 433 MHz] ──> antena SMA
                  │      │                     │
-                 │      └── GPIO3: przycisk   └── wspólna GND, tylko 3,3 V
+                 │      └── GPIO0: przycisk (BOOT)  └── wspólna GND, tylko 3,3 V
                  └── GPIO15: wbudowana LED (aktywna HIGH)
 
  Zasilanie docelowe z gniazda zapalniczki samochodowej:

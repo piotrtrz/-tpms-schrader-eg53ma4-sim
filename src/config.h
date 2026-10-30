@@ -6,14 +6,21 @@
 
 /* ESP32-S2-MINI (ESP32-S2FN4R2) + CC1101 433 MHz (3,3 V).
  * GPIO19/20 to natywne USB, GPIO26-32 obsluguja flash/PSRAM w obudowie,
- * GPIO0/45/46 to piny strapping - nie uzywac ich do CC1101 ani przycisku. */
+ * GPIO45/46 to piny strapping - nie uzywac ich do CC1101. */
 #define PIN_CC1101_SCK 4
 #define PIN_CC1101_MISO 5
 #define PIN_CC1101_MOSI 6
 #define PIN_CC1101_CS 7
 #define PIN_CC1101_GDO0 10
 
-#define PIN_BUTTON 3
+/* Przycisk sterujacy i budzenie z deep sleep: przycisk BOOT plytki
+ * (GPIO0 do GND), potwierdzony testem na sprzecie. GPIO0 to pin strapping:
+ * przytrzymany podczas zasilania/reset uruchamia bootloader zamiast firmware.
+ * Zewnetrzny przycisk monostabilny mozna podlaczyc zamiast tego pod GPIO3
+ * i przelaczyc -DPIN_BUTTON=3 w build_flags. */
+#ifndef PIN_BUTTON
+#define PIN_BUTTON 0
+#endif
 #define BTN_ACTIVE_LEVEL 0
 /* Wbudowana niebieska LED S2 Mini na GPIO15 jest aktywna stanem wysokim. */
 #define PIN_LED 15
@@ -48,6 +55,13 @@
 /* Harmonogram i moc poczatkowa: settings_defaults() w settings.cpp.
  * Sa to parametry eksperymentalne, a nie potwierdzony harmonogram OE. */
 #define BOOT_STAY_AWAKE_MS 10000u
+
+/* Mikrodrzemki: zamiast jednego dlugiego snu LED miga co NAP_PERIOD_MS takze
+ * miedzy wysylkami. Sen to reszta okresu po czasie boot + okno, a TX ramek
+ * TPMS pozostaje co interwal (licznik w pamieci RTC). */
+#define NAP_PERIOD_MS 2000u
+#define NAP_AWAKE_MS 400u     /* widoczne migniecie LED po budziku timera */
+#define NAP_MIN_SLEEP_MS 200u
 #define SERIAL_BAUD 115200
 
 #define BTN_DEBOUNCE_MS 30u

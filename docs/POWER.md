@@ -14,6 +14,17 @@ przy wyłączonym zapłonie emulator nie pobiera prądu wcale.
 
 - NORMAL po wybudzeniu RTC: inicjalizacja, burst czterech kół, wyjście z TX i deep
   sleep. Nie ma 10-sekundowego okna konsoli po zwykłym budziku.
+- Mikrodrzemki: sen jest dzielony na kawałki tak, żeby dioda migała co ok. 2 s
+  także między wysyłkami (`NAP_PERIOD_MS` w `config.h`). Po budzeniu timera
+  urządzenie pokazuje jedno widoczne mignięcie i śpi resztę okresu po czasie
+  boot + okno (`NAP_AWAKE_MS`). Przycisk budzi natychmiast (EXT1) niezależnie
+  od mikrodrzemek.
+- TX ramek pozostaje co interwał (domyślnie 30 s): licznik snu w pamięci RTC
+  zlicza przespane kawałki od ostatniego cyklu TX; `interval` wchodzi w życie
+  przy następnym cyklu. Po dłuższym czuwaniu (np. `stay`) pierwszy kawałek
+  jest pełny.
+- **Mikrodrzemki zwiększają pobór** (boot co ok. 2 s zamiast jednego snu na
+  interwał) — liczby poniżej opisują stary model i wymagają pomiaru HIL.
 - Po power-on, przycisku lub LF: okno konsoli 10 s; `stay N` wydłuża je.
 - LEARN: TX jednego koła co 2 s, bez deep sleep, maks. 60 s na koło/15 min sesji.
 - SINGLE: TX jednego koła co 2 s, bez deep sleep, maks. 5 min.

@@ -1,5 +1,6 @@
 /* Symulator diagnostyczny TPMS. Sztuczne cisnienie moze ukryc usterke opony. */
 #include <Arduino.h>
+#include <esp_attr.h>
 #include <esp_sleep.h>
 #include <soc/soc_caps.h>
 
@@ -18,6 +19,10 @@ static const char *const WHEEL_NAMES[WHEEL_COUNT] = {"FL", "FR", "RR", "RL"};
 static uint32_t stay_awake_until;
 static bool request_sleep;
 static uint32_t supply_mv;
+/* Mikrodrzemki: czas przespany od ostatniego cyklu TX i dlugosc ostatniego
+ * kawalka snu przetrwaja deep sleep w pamieci RTC (kasowane przez power-on). */
+RTC_DATA_ATTR static uint32_t slept_ms;
+RTC_DATA_ATTR static uint32_t last_slice_ms;
 #if PIN_LF_TRIGGER >= 0
 static bool lf_previous;
 #endif
@@ -172,11 +177,18 @@ static void go_sleep(void)
         app_stay_awake(500u);
         return;
     }
-    uint32_t seconds = g_app->interval_s(ignition_on());
+    /* Mikrodrzemka: reszta okresu po czasie boot+okno, zeby migniecia LED
+     * wypadaly co NAP_PERIOD_MS niezaleznie od dlugosci budzenia. */
+    uint32_t awake_ms = millis();
+    uint32_t slice_ms = NAP_PERIOD_MS;
+    if (awake_ms + NAP_MIN_SLEEP_MS < NAP_PERIOD_MS) {
+        slice_ms = NAP_PERIOD_MS - awake_ms;
+    }
     ui_set_pattern(UI_PAT_OFF);
-    Serial.printf("sleep %lu s\n", (unsigned long)seconds);
+    Serial.printf("sleep %lu ms\n", (unsigned long)slice_ms);
     Serial.flush();
-    power_deep_sleep(seconds);
+    last_slice_ms = slice_ms;
+    power_deep_sleep(slice_ms);
 }
 
 void setup(void)
@@ -195,18 +207,6 @@ void setup(void)
 #endif
 
     g_app = &app_state;
-    bool radio_ready = radio_init(&g_settings);
-    supply_mv = power_read_mv();
-    Serial.printf("\nTPMS DIAG FW %s - DANE SZTUCZNE, NIE DO JAZDY\n", FW_VERSION);
-    Serial.printf("NVS: %s; dostep=%s\n",
-                  settings_load_result_text(settings_store_last_load()),
-                  settings_store_available() ? "tak" : "nie");
-    if (!radio_ready) {
-        Serial.println(F("BLAD: brak CC1101; sprawdz 3V3/SPI"));
-    }
-    if (power_low_battery(supply_mv)) {
-        Serial.println(F("OSTRZEZENIE: niskie zasilanie emulatora"));
-    }
 
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
 #if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
@@ -216,7 +216,34 @@ void setup(void)
     /* ESP32-S2: budzenie z pinow RTC zglasza EXT1. */
     bool pin_wake = cause == ESP_SLEEP_WAKEUP_EXT1;
 #endif
-    bool transmit = !pin_wake;
+    bool timer_wake = cause == ESP_SLEEP_WAKEUP_TIMER;
+    if (timer_wake) {
+        slept_ms += last_slice_ms;
+    }
+    /* TX co interwal: power-on, budzenie po przespaniu calego cyklu albo
+     * wyczerpany licznik snu. Budzenie przyciskiem nie nadaje (jak wczesniej). */
+    uint32_t interval_ms = g_app->interval_s(ignition_on()) * 1000u;
+    bool transmit = !pin_wake && (!timer_wake || slept_ms >= interval_ms);
+    bool quick_nap = timer_wake && !transmit;
+    if (transmit) {
+        slept_ms = 0;
+    }
+
+    bool radio_ready = radio_init(&g_settings);
+    if (!quick_nap) {
+        supply_mv = power_read_mv();
+        Serial.printf("\nTPMS DIAG FW %s - DANE SZTUCZNE, NIE DO JAZDY\n", FW_VERSION);
+        Serial.printf("NVS: %s; dostep=%s\n",
+                      settings_load_result_text(settings_store_last_load()),
+                      settings_store_available() ? "tak" : "nie");
+        if (!radio_ready) {
+            Serial.println(F("BLAD: brak CC1101; sprawdz 3V3/SPI"));
+        }
+        if (power_low_battery(supply_mv)) {
+            Serial.println(F("OSTRZEZENIE: niskie zasilanie emulatora"));
+        }
+    }
+
     g_app->begin(millis(), transmit);
 #if PIN_LF_TRIGGER >= 0
     uint64_t wake_mask = 0;
@@ -231,22 +258,32 @@ void setup(void)
         g_app->send_current();
     }
 #endif
-    stay_awake_until = cause == ESP_SLEEP_WAKEUP_TIMER
-            ? millis() : millis() + BOOT_STAY_AWAKE_MS;
+    /* Okna: power-on/przycisk/LF = konsola 10 s; budzenie timera = od razu
+     * sen po TX, a mikrodrzemka tylko na widoczne migniecie LED. */
+    stay_awake_until = millis() + (timer_wake
+            ? (transmit ? 0u : NAP_AWAKE_MS) : BOOT_STAY_AWAKE_MS);
     sync_ui();
-    app_print_info();
-    Serial.println(F("gotowy; help = komendy; stay 60 = konsola 60 s"));
+    if (!quick_nap) {
+        app_print_info();
+        Serial.println(F("gotowy; help = komendy; stay 60 = konsola 60 s"));
+    }
 }
 
 void loop(void)
 {
     uint32_t now = millis();
     ui_update();
-    switch (ui_poll()) {
+    ui_event_t ev = ui_poll();
+    switch (ev) {
     case UI_EV_SHORT: g_app->short_press(now); break;
     case UI_EV_LONG: g_app->long_press(now); break;
     case UI_EV_VERYLONG: g_app->very_long_press(now); break;
     default: break;
+    }
+    if (ev != UI_EV_NONE) {
+        /* Kazdy gest = okno konsoli 10 s (POWER.md), takze po wyjsciu
+         * z LEARN/SINGLE - urzadzenie nie zasypia natychmiast po przycisku. */
+        app_stay_awake(BOOT_STAY_AWAKE_MS);
     }
     console_poll();
 #if PIN_LF_TRIGGER >= 0

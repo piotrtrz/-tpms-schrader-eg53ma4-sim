@@ -48,7 +48,7 @@ bool power_low_battery(uint32_t mv)
     return mv > 500u && mv < (uint32_t)LOWBATT_THRESHOLD_MV;
 }
 
-void power_deep_sleep(uint32_t seconds)
+void power_deep_sleep(uint32_t ms)
 {
     radio_sleep();
     gpio_hold_en((gpio_num_t)PIN_CC1101_CS);
@@ -58,11 +58,12 @@ void power_deep_sleep(uint32_t seconds)
 
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
     /* PARKING_SHUTDOWN nie istnieje: kazdy sen ma budzik i nie mozna
-     * zatrzymac urzadzenia do czasu recznego wybudzenia. */
-    if (seconds < SETTINGS_INTERVAL_MIN_S) {
-        seconds = SETTINGS_INTERVAL_MIN_S;
+     * zatrzymac urzadzenia do czasu recznego wybudzenia. Dolny prog
+     * gwarantuje budzik takze dla mikrodrzemek. */
+    if (ms < NAP_MIN_SLEEP_MS) {
+        ms = NAP_MIN_SLEEP_MS;
     }
-    esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
+    esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000ULL);
 
 #if PIN_BUTTON >= 0 || PIN_LF_TRIGGER >= 0
     /* Budzenie z pinow RTC (na ESP32-S2: GPIO0-21). Oba wejscia sa aktywne
